@@ -1,13 +1,20 @@
 """Synchronous dependencies scoped to the application serving each request."""
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from datetime import datetime
 from typing import cast
 
 from fastapi import Request
 from sqlalchemy.orm import Session
 
+from app.core.clock import utc_now
 from app.core.config import Settings
 from app.db.session import Database
+
+
+def get_clock() -> Callable[[], datetime]:
+    """Server-owned clock; tests can override time without accepting client timestamps."""
+    return utc_now
 
 
 def get_settings(request: Request) -> Settings:

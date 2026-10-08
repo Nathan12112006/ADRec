@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.clock import utc_now
 from app.core.errors import WorkflowError
+from app.core.observability import stage
 from app.db.selection import select_baseline_ad
 from app.models.records import Ad, Advertiser, Recommendation, RequestOutcome, User
 
@@ -82,7 +83,8 @@ def _create_or_replay(
         user = session.scalar(select(User).where(User.id == user_id).with_for_update(read=True))
         if user is None:
             raise WorkflowError(404, "unknown_user", "Synthetic user was not found")
-        candidate = select_baseline_ad(session, user.interests, dataset_id=user.dataset_id)
+        with stage("selection_ms"):
+            candidate = select_baseline_ad(session, user.interests, dataset_id=user.dataset_id)
         if candidate is None:
             created_at = clock()
             session.add(

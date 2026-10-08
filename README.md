@@ -1,10 +1,9 @@
 # AdFlow
 
-A personalized advertising recommendation demo using synthetic data. Ticket 01 supplies
-the backend package and configuration foundation. Ticket 02 adds synchronous PostgreSQL
-sessions and explicit Alembic migrations. Ticket 03 adds reproducible entity seeding.
-Recommendation/event APIs, health checks,
-and Docker packaging arrive in later tickets.
+A personalized advertising recommendation demo using synthetic data. The backend provides
+reproducible entity seeding, durable recommendation replay, client-confirmed impressions,
+attributed clicks and simulated revenue through a synchronous PostgreSQL-backed API.
+Health checks and structured request logging are available. Docker packaging is ticket 09.
 
 ## Install and run locally
 
@@ -22,11 +21,11 @@ uv run --locked uvicorn app.main:create_app --factory --host 127.0.0.1 --port 80
 ```
 
 Open [Swagger UI](http://127.0.0.1:8000/docs) or
-[OpenAPI](http://127.0.0.1:8000/openapi.json). No business endpoints exist yet. Importing
+[OpenAPI](http://127.0.0.1:8000/openapi.json). Importing
 `app.main` alone needs no configuration; calling `create_app()` validates configuration.
 Startup creates a lazy connection pool, without connecting or creating tables. Shutdown
 disposes the pool. Stop the server with Ctrl+C. Set up the database explicitly below before
-using database-backed functionality added by subsequent tickets.
+using the recommendation and event endpoints.
 
 `uv.lock` pins runtime, development, and build dependencies. Hatchling is included in the
 development group so `uv build --no-build-isolation` uses the locked environment instead
@@ -59,8 +58,8 @@ even across hosts, credentials, and encoded names. This is a configuration guard
 of database permissions or runtime connectivity. The database adapter applies these limits,
 sets the connection timezone to UTC, and disconnects sessions left idle in a transaction for
 30 seconds. Statement timeouts bound server execution, not an end-to-end HTTP deadline.
-Structured logging is ticket 07. Set server log verbosity
-with Uvicorn's `--log-level` option until application logging is implemented.
+`ADFLOW_LOG_LEVEL` controls application request logging. Uvicorn's `--log-level` option
+controls server logs separately.
 
 Both URLs are secret fields, hidden in normal settings representations. The environment
 loader raises `ConfigurationError` containing only field locations and error codes, never
@@ -82,7 +81,8 @@ uv run --locked pytest
 uv build --no-build-isolation
 ```
 
-The unit tests use no PostgreSQL connection. TestClient exercises
+The unit tests require no running PostgreSQL server; health failure checks attempt a
+connection to an unavailable local port. TestClient exercises
 the real ASGI app and synchronous request dependencies in process. On this Codex Windows
 host, TestClient's event loop requires running outside the execution sandbox; normal local
 execution works. Integration tests are skipped unless `ADFLOW_RUN_POSTGRES_TESTS=1`.
@@ -246,7 +246,7 @@ recommendation creation and replay. Use a fresh session from `database.session()
 the service owns its transaction and commits before returning a `RecommendationResult`.
 It returns the saved ID, creation time, user and immutable `AdSelection`, or a result
 with both recommendation ID and selection `None` for no ad. Selection does not create
-an impression. HTTP routes and event workflows are later tickets 07 and 06.
+an impression. HTTP routes and the event workflow are described below.
 
 Request keys contain 1–255 characters and cannot be blank. Keys are preserved exactly
 and are globally unique. Within 24 hours, the same key/user returns its saved selection
@@ -254,7 +254,7 @@ or no-ad outcome without reranking, even after inventory/profile edits. Another 
 gets `WorkflowError` with status 409; ownership is checked before expiry. At or after
 creation plus 24 hours, reuse returns 410 and requires a fresh key. Unknown users get
 404. Invalid keys get 422. Required database reads, writes, commit errors and pool/lock
-timeouts get a safe 503; API adapters will translate these workflow statuses in ticket 07.
+timeouts get a safe 503; API adapters translate these workflow statuses into HTTP responses.
 
 The service scans only ads in the user's dataset, respecting the existing composite
 foreign keys that prevent cross-dataset recommendations. The inventory reader accepts
@@ -308,7 +308,7 @@ reset or durable-history deletion occurs. Run integration checks serially.
 recommendations, supply a fresh session from `database.session()`; the service owns the
 transaction. The result contains recommendation ID, event type, server receipt time,
 stored user/ad attribution and decimal simulated revenue. Clients provide no user/ad,
-bid or revenue claims. HTTP endpoint/UUID validation and response mapping are ticket 07.
+bid or revenue claims. HTTP endpoints validate UUIDs and map responses as described below.
 
 Only explicit display confirmation records an impression. A first click needs a
 committed impression; otherwise `WorkflowError` reports 409 with `impression_required`,
@@ -357,6 +357,102 @@ and install fixture-specific insert/commit failure triggers removed in `finally`
 They verify event counts and decimal revenue directly at the PostgreSQL persistence
 boundary without clearing existing history. Run integration checks serially.
 
+## HTTP lifecycle and health
+
+With migrations applied and the default seed generated, start Uvicorn as above. Run from
+`backend/` in another PowerShell terminal. The first command reproduces a user ID for the
+default seed; if you changed seed/counts, pass those same values to `SeedConfig`:
+
+```powershell
+$userId = [long](uv run --locked python -c "from app.seeding import SeedConfig, generate_entities; print(next(row['id'] for kind, row in generate_entities(SeedConfig()) if kind == 'users'))")
+$api = 'http://127.0.0.1:8000'
+$headers = @{ 'Idempotency-Key' = [guid]::NewGuid().ToString() }
+$body = @{ user_id = $userId } | ConvertTo-Json
+$recommendation = Invoke-RestMethod -Method Post -Uri "$api/api/v1/recommendations" -Headers $headers -ContentType 'application/json' -Body $body
+$replay = Invoke-RestMethod -Method Post -Uri "$api/api/v1/recommendations" -Headers $headers -ContentType 'application/json' -Body $body
+$eventBody = @{ recommendation_id = $recommendation.recommendation_id } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri "$api/api/v1/events/impression" -ContentType 'application/json' -Body $eventBody
+Invoke-RestMethod -Method Post -Uri "$api/api/v1/events/click" -ContentType 'application/json' -Body $eventBody
+Invoke-RestMethod -Method Post -Uri "$api/api/v1/events/click" -ContentType 'application/json' -Body $eventBody
+Invoke-RestMethod -Uri "$api/health/live"
+Invoke-RestMethod -Uri "$api/health/ready"
+```
+
+The recommendation response contains `recommendation_id`, `user_id`, `created_at`, and
+`selection` (the saved ad payload, decimal bid, overlap score and strategy identity).
+The baseline's `predicted_ctr` is null. Reusing the key replays the saved response.
+With no eligible ad, the response is 204 with an empty body; handle this before sending
+events. Event responses contain `recommendation_id`, `event_type`, server-derived
+`user_id`/`ad_id`, the original event `created_at`, and decimal `simulated_revenue` as a
+JSON string. Duplicate clicks return the same acceptance and add no credit.
+
+| Response | Meaning |
+| --- | --- |
+| 200 | Saved selection/replay or accepted/duplicate event |
+| 204 | Saved no-ad outcome/replay; no recommendation or event |
+| 404 | Unknown user/recommendation |
+| 409 | Key belongs to another user, or click requires impression confirmation |
+| 410 | Request key expired, or first event received after expiry |
+| 422 | Missing/malformed body/header; positive signed 64-bit user ID and UUID required |
+| 503 | Required durable storage unavailable or repeatedly changing inventory |
+
+Bodies reject extra fields, including client attribution and timestamps. User IDs must
+be JSON integers. Provide exactly one nonblank `Idempotency-Key`, at most 255 characters;
+its exact value is preserved for replay. Error bodies use
+`{"error":{"code":"impression_required","message":"Confirm the impression before retrying the click"}}`.
+Validation errors return `invalid_request` (or `invalid_request_key`) without echoing input.
+Unexpected application failures return a safe 500 `internal_error`. Every HTTP response
+includes a server-generated `X-Request-ID`.
+
+`/health/live` performs no database work. `/health/ready` executes `SELECT 1` through the
+bounded pool and returns 503 on connectivity failure. It checks reachability; migrations
+remain an explicit setup check.
+
+Application logger `adflow.requests` emits one JSON INFO record per request with request
+ID, route template, method, status and duration in milliseconds. Validated workflow
+context adds user/recommendation/ad IDs, outcome, strategy and overlap score where
+available. Request keys appear only as SHA-256 digests. Raw headers, bodies, query strings,
+ad payloads, database exception text and credentials are excluded. Fixed stage hooks
+measure `selection_ms`, `recommendation_ms`, `event_ms` or `database_probe_ms` where run;
+replays skip selection. Workflow timers include commit time. Request duration ends when
+response headers are prepared; it is not client-observed network latency. Timings are
+bounded request-local data, with no metric history or telemetry platform. The selection
+scan's existing complexity is unchanged.
+
+Focused checks from `backend/`:
+
+```powershell
+uv run --locked pytest tests/unit/test_http.py
+$env:ADFLOW_RUN_POSTGRES_TESTS = '1'
+uv run --locked pytest tests/integration/test_http_lifecycle.py
+uv run --locked pytest tests/integration/test_http_resilience.py
+Remove-Item Env:ADFLOW_RUN_POSTGRES_TESTS
+```
+
+The resilience suite uses the production app lifespan and session dependencies with its
+application URL explicitly set to `TEST_DATABASE_URL`; its companion URL names an unused
+database. Neither URL targets development. It overrides only the server-owned `get_clock`
+dependency, so exact UTC expiry checks do not need sleeps or client timestamps. The clock
+is passed into both services; normal requests continue to use `utc_now`.
+
+Tests simulate a failed response send after selection commits, then replay the saved ad
+after bid/profile/eligibility edits. Concurrent HTTP tests hold a user-row or event-table
+lock and observe four blocked PostgreSQL transactions before releasing them. A two-second
+gate deadline and finite database waits bound synchronization; the small polling delay
+does not establish ordering. Insert/commit failures use uniquely named triggers scoped to
+one request key or recommendation/event pair, removed in `finally`. Assertions verify
+durable counts and decimal credit, including zero bids and expired accepted duplicates.
+Run integration tests serially against a dedicated test database. Fixtures append unique
+datasets; they never reset, truncate or delete development history. These scenarios verify
+correctness, with no throughput or latency claim. Mechanisms follow official
+[FastAPI dependency overrides](https://fastapi.tiangolo.com/advanced/testing-dependencies/)
+and [PostgreSQL locking](https://www.postgresql.org/docs/18/explicit-locking.html).
+
+HTTP validation/error adapters follow the official
+[FastAPI error handlers](https://fastapi.tiangolo.com/tutorial/handling-errors/) and
+[response status documentation](https://fastapi.tiangolo.com/tutorial/response-status-code/).
+No dependency versions changed for ticket 07.
+
 ## Persistence contract
 
 `datasets` records identity, seed, generator version and JSON configuration. Users,
@@ -399,6 +495,8 @@ application-only deduplication; no throughput claim is made.
 | `backend/app/main.py` | Factory and lifespan; creates/disposes a lazy database pool per app |
 | `backend/app/core/config.py` | Environment loading, safe validation, connection limits |
 | `backend/app/api/dependencies.py` | Synchronous settings/database/session request dependencies |
+| `backend/app/api/routes.py` and `backend/app/schemas/` | Thin validated lifecycle/health routes and public response contracts |
+| `backend/app/core/observability.py` | JSON request logger and bounded request-local stage timing hooks |
 | `backend/app/db/session.py` | Bounded PostgreSQL engine, sessions, atomic transaction contexts |
 | `backend/app/models/records.py` | Typed dataset, user, advertiser, ad, outcome, recommendation and event records |
 | `backend/alembic.ini` and `backend/migrations/` | Explicit versioned schema and immutable-history triggers |
@@ -413,7 +511,7 @@ application-only deduplication; no throughput claim is made.
 | `backend/pyproject.toml` | Package, dependency ranges, pytest, Ruff, strict mypy configuration |
 | `backend/uv.lock` | Reproducible resolved dependency versions |
 
-The approved layout adds `schemas`, `services`, `ranking` and `scripts` when their
+The approved layout adds remaining subsystems when their
 implementation tickets begin. Empty subsystem
 placeholders are deliberately deferred according to the Phase 1 boundary decision.
 
