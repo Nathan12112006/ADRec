@@ -1,0 +1,39 @@
+# CTR model and evaluation options
+
+Researched 2026-10-07 against official scikit-learn documentation/source. Supporting evidence for ticket 05; recommendations below are proposals, not resolved requirements or measured results. No model was trained.
+
+## Preprocessing and features
+
+**Facts.** Preprocessing used during training must also be applied at inference. Learned transformations must be fitted only on training data; scikit-learn recommends a Pipeline to reduce inconsistent preprocessing and leakage. [Common pitfalls](https://scikit-learn.org/stable/common_pitfalls.html)
+
+ColumnTransformer applies different transformations to selected columns and concatenates their outputs. Its default drops unspecified columns. [ColumnTransformer](https://scikit-learn.org/stable/modules/generated/sklearn.compose.ColumnTransformer.html)
+
+OneHotEncoder with `handle_unknown="ignore"` encodes an unseen category as zeros in that feature's encoded columns. This prevents that particular transform failure; it does not establish predictive quality for unseen categories. [OneHotEncoder](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.OneHotEncoder.html)
+
+**Recommendation.** Begin with interest similarity/overlap, whether the user includes the ad category, ad category, and device. Country/age group can be optional explicit features if their role is explained. Exclude user/ad IDs, bid, experiment variant, hidden preferences, true generating probabilities, and the outcome itself. Defer historical aggregate CTR features: they require point-in-time computation and matching serving state. Preserve one shared deterministic feature builder and persist a fitted ColumnTransformer-plus-LogisticRegression Pipeline. Explicitly validate input names/types; use an explicit missing-category convention and unknown handling. Empty interests produce defined zero overlap rather than missing values. Shared feature semantics remain necessary even with a persisted pipeline.
+
+## Model and imbalance
+
+**Facts.** LogisticRegression is regularized by default. `class_weight=None` gives classes equal per-sample weights; `balanced` weights classes inversely to observed frequencies. `predict_proba` accepts batches and orders output columns according to `classes_`. [LogisticRegression](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LogisticRegression.html)
+
+**Inference/recommendation.** Start with unweighted regularized Logistic Regression, not automatic class balancing or negative undersampling. Reweighting changes the fitted objective's effective class prevalence, so probabilities need not represent the original click frequency; rare clicks alone are not a reason to apply it when the goal is CTR estimation. If weighting/sampling is later explored, compare probability quality on the original unweighted distribution. Use validation to choose a small set of regularization settings, check convergence, and record parameters and dependency versions. Never promise a target AUC or lift.
+
+## Evaluation and baseline
+
+**Facts.** Log loss scores probabilistic predictions and accepts explicit `labels`; binary one-dimensional input represents positive-class probability. [Log loss](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.log_loss.html) Brier loss measures squared probability error; explicitly selecting positive label 1 makes the target unambiguous. [Brier loss](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.brier_score_loss.html)
+
+Log loss and Brier loss mix calibration, discrimination, and inherent uncertainty: a lower score alone does not prove better calibration. Reliability diagrams compare average prediction with observed positive fraction within bins; bin counts reveal sparse evidence. Logistic Regression can be well calibrated when appropriately specified/regularized, but this is conditional rather than guaranteed. Calibration fitting requires data disjoint from estimator fitting. [Calibration guide](https://scikit-learn.org/stable/modules/calibration.html)
+
+ROC-AUC measures ranking from scores, rather than probability calibration. Binary probabilities use the greater class label. [ROC-AUC](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.roc_auc_score.html) With only one observed class it is undefined; current upstream source warns and returns NaN. Older dependency behavior can differ, so callers should explicitly guard this case. [Official source](https://github.com/scikit-learn/scikit-learn/blob/main/sklearn/metrics/_ranking.py)
+
+DummyClassifier's `prior` strategy predicts the training label distribution for every row, providing a constant probability baseline. [DummyClassifier](https://scikit-learn.org/stable/modules/generated/sklearn.dummy.DummyClassifier.html)
+
+**Recommendation.** Retain the resolved chronological 70/15/15 split. Fit preprocessing and model on 70%, select settings on 15% validation, then evaluate the frozen selected pipeline on the final 15% once. Fit the constant base-rate baseline on the same training labels. Report sample/positive counts and observed CTR per split, log loss (primary), ROC-AUC, Brier loss, and a reliability diagram with counts. Compare model and baseline on identical rows. For a single-class evaluation subset report AUC unavailable, never zero; log loss with explicit `[0, 1]` and binary Brier remain useful. Require both classes in training. Keep an underperforming result visible; do not redesign the generator after seeing final test results. Defer calibration initially; if needed, define disjoint calibration data within development data without touching the final test. Distinguish generalization to later outcomes in the same synthetic world from unseen-user/ad generalization and real-world effectiveness.
+
+## Serving and artifacts
+
+**Recommendation.** A batch interface accepts ordered user-context/candidate rows and returns the same number/order of finite probabilities in `[0, 1]`, plus model/feature version. Find label `1` in the loaded estimator's `classes_` instead of blindly assuming a column. Reject incompatible label sets. Load once at startup; reuse the pipeline for the entire candidate batch. Test batch/single-row parity, reload parity, empty batches, unknown categories, and feature compatibility. Measure feature building and batch inference separately from offline quality; no latency benchmark exists yet.
+
+**Facts.** Joblib uses pickle and can execute arbitrary code when loaded. It suits trusted internal artifacts; skops offers inspection and explicit type trust without pickle, but still needs source trust and review. Neither solves scikit-learn version compatibility: loading across scikit-learn versions is unsupported, and matching dependencies are needed. [Model persistence](https://scikit-learn.org/stable/model_persistence.html), [Official skops guidance](https://skops.readthedocs.io/en/stable/persistence.html)
+
+**Recommendation.** Joblib is the simplest option for artifacts created and verified by this project's own training command; accept no uploaded arbitrary model files. Skops is an alternative if artifact exchange becomes a requirement, not a version-portability solution. Persist the whole fitted pipeline plus a manifest: model/feature schema versions, label definition, training dataset/generator provenance, split boundaries, hyperparameters, dependency versions, metrics, and artifact checksum. Validate compatibility and a small prediction fixture before activation. A checksum detects accidental change but does not authenticate an attacker-controlled artifact. Retrain after incompatible changes. Missing/corrupt/incompatible models should trigger an explicitly labeled deterministic ranking fallback (or disable model-required serving), never an invented CTR or silent use of incompatible coefficients; settle this choice in the ranking/serving contract.
