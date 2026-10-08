@@ -3,7 +3,7 @@
 import argparse
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 parser = argparse.ArgumentParser()
@@ -26,9 +26,17 @@ ads = {
     row["id"]
     for row in map(json.loads, (args.directory / "ads.jsonl").read_text().splitlines())
 }
+with (args.directory / "ads.jsonl").open() as stream:
+    for line in stream:
+        ad = json.loads(line)
+        assert ad["active"] and ad["advertiser_active"]
+        assert ad["dataset_id"] == manifest["dataset_id"]
 clicks = 0
 count = 0
 last = None
+start = datetime.fromisoformat(
+    manifest["configuration"]["start"].replace("Z", "+00:00")
+)
 with (args.directory / "exposures.jsonl").open() as stream:
     for count, line in enumerate(stream, start=1):
         row = json.loads(line)
@@ -36,11 +44,15 @@ with (args.directory / "exposures.jsonl").open() as stream:
         assert row["user_id"] in users and row["ad_id"] in ads
         assert type(row["clicked"]) is int and row["clicked"] in (0, 1)
         when = datetime.fromisoformat(row["impressed_at"])
+        assert when == start + timedelta(
+            seconds=(count - 1) * manifest["configuration"]["interval_seconds"]
+        )
         assert last is None or when > last
         last = when
         assert (row["clicked_at"] is not None) == bool(row["clicked"])
         if row["clicked"]:
-            assert datetime.fromisoformat(row["clicked_at"]) >= when
+            delay = (datetime.fromisoformat(row["clicked_at"]) - when).total_seconds()
+            assert 1 <= delay <= manifest["configuration"]["max_click_delay_seconds"]
         assert set(row) == {
             "impression_id",
             "user_id",

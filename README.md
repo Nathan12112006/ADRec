@@ -829,6 +829,17 @@ Focused verification (isolated PostgreSQL opt-in enabled):
 uv run --locked pytest tests/unit/test_history_outcomes.py tests/unit/test_history_artifacts.py tests/unit/test_history_cli.py tests/integration/test_history.py
 ```
 
+[Ticket 18's measured full run](.scratch/adflow-implementation/issues/18-synthetic-history.md)
+used 10,000 users, 100 advertisers, 100,000 eligible ads and 1,000,000 exposures.
+It produced 22,351 clicks (2.2351%); matched-interest rate was 3.6506%, unmatched 1.5299%.
+The native runs took 119.88s and 122.37s and reproduced identical file hashes/manifests.
+Each output occupied 195,766,408 bytes. Process-wide cumulative peak working set reached
+374,382,592 bytes on the repeat; this includes the frozen catalog and is not isolated
+batch memory. These are local Windows Python 3.10.11 offline costs, excluding entity
+preparation, not a hardware-independent promise or serving-capacity result. Raw histories
+remain under ignored `artifacts/history-ticket18-full/`; committed manifests, resource
+observations and streaming audit results are under the ticket's evidence directory.
+
 ## Candidate-retrieval technical gate
 
 [Ticket 17](.scratch/adflow-implementation/issues/17-retrieval-gate.md) records the

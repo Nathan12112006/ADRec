@@ -1,0 +1,232 @@
+{
+  "runs": [
+    {
+      "output": "..\\artifacts\\history-ticket18-full\\first",
+      "wall_seconds": 119.88036449998617,
+      "process_cpu_seconds": 116.046875,
+      "process_memory_after": {
+        "WorkingSet64": 96346112,
+        "PeakWorkingSet64": 371613696
+      },
+      "artifact_bytes": 195766408
+    },
+    {
+      "output": "..\\artifacts\\history-ticket18-full\\repeat",
+      "wall_seconds": 122.36810490000062,
+      "process_cpu_seconds": 117.5625,
+      "process_memory_after": {
+        "WorkingSet64": 107102208,
+        "PeakWorkingSet64": 374382592
+      },
+      "artifact_bytes": 195766408
+    }
+  ],
+  "identical_manifests_and_file_hashes": true,
+  "manifest": {
+    "configuration": {
+      "batch_size": 1000,
+      "impressions": 1000000,
+      "interval_seconds": 1,
+      "max_click_delay_seconds": 300,
+      "outcome": {
+        "category_preference_weight": 0.8,
+        "hidden_scale": 0.15,
+        "intercept": -4.2,
+        "mobile_offset": 0.15,
+        "shared_interest_weight": 0.45,
+        "tablet_offset": -0.1
+      },
+      "seed": 18,
+      "start": "2026-01-01T00:00:00Z"
+    },
+    "counts": {
+      "clicks": 22351,
+      "eligible_ads": 100000,
+      "impressions": 1000000,
+      "users": 10000
+    },
+    "dataset_id": "b26ddfe8-cac2-5631-9a8f-d136bb6e1e1c",
+    "entity_manifest": {
+      "configuration": {
+        "active_percent": 100,
+        "ads": 100000,
+        "advertisers": 100,
+        "age_groups": [
+          "18-24",
+          "25-34",
+          "35-44",
+          "45-54",
+          "55+"
+        ],
+        "bid_cents": [
+          25,
+          500
+        ],
+        "category_interests": {
+          "cars": [
+            "cars",
+            "technology"
+          ],
+          "education": [
+            "education"
+          ],
+          "fashion": [
+            "fashion"
+          ],
+          "finance": [
+            "finance"
+          ],
+          "fitness": [
+            "fitness",
+            "sports"
+          ],
+          "food": [
+            "food"
+          ],
+          "gaming": [
+            "gaming",
+            "technology"
+          ],
+          "movies": [
+            "movies"
+          ],
+          "music": [
+            "music"
+          ],
+          "photography": [
+            "photography"
+          ],
+          "sports": [
+            "sports",
+            "fitness"
+          ],
+          "technology": [
+            "technology",
+            "gaming",
+            "photography"
+          ],
+          "travel": [
+            "travel",
+            "photography",
+            "food"
+          ]
+        },
+        "category_preference_count": [
+          1,
+          3
+        ],
+        "countries": [
+          "US",
+          "CA",
+          "GB",
+          "DE",
+          "AU"
+        ],
+        "devices": [
+          "mobile",
+          "desktop",
+          "tablet"
+        ],
+        "generator_version": "entities-v1",
+        "historical_clicks": 0,
+        "historical_impressions": 0,
+        "python_version": "3.10.11",
+        "sampling": "uniform; independent users/advertisers/ads random streams",
+        "seed": 180018,
+        "simulated_time_range": null,
+        "split_definitions": null,
+        "topics": [
+          "technology",
+          "gaming",
+          "fitness",
+          "travel",
+          "food",
+          "fashion",
+          "sports",
+          "finance",
+          "education",
+          "music",
+          "movies",
+          "photography",
+          "cars"
+        ],
+        "user_interest_count": [
+          1,
+          5
+        ],
+        "users": 10000
+      },
+      "generator_version": "entities-v1",
+      "seed": 180018
+    },
+    "exposure_policy": "independent uniform users and uniform eligible ads with replacement",
+    "files": {
+      "ads.jsonl": "01c96a36f226653707da4b7075c462142a19ab8e0171580a8d0f6ab916cc1539",
+      "exposures.jsonl": "f33755409f532e59b434ed1cee322ac1730ca4d9110e816b018846d43fde4431",
+      "users.jsonl": "1d1499896060ed9f1b8c84ccf861f56971d451cd388785cb46da103e6f227a46"
+    },
+    "hidden_rule": "per-entity seeded uniform [-hidden_scale, hidden_scale]; never saved in rows",
+    "history_id": "2ed92061-8b66-59b4-8a1b-509f340d47d0",
+    "history_version": "historical-exposure-v1",
+    "label_definition": "one binary click outcome per historical exposure; clicked_at only for positive labels",
+    "model_input_exclusions": [
+      "bid",
+      "IDs",
+      "experiment variant",
+      "hidden preferences",
+      "true probability",
+      "clicked",
+      "clicked_at"
+    ],
+    "observed_ctr": 0.022351,
+    "outcome_draw": "Random(SHA256(outcome_version/seed/outcomes/impression_id)); live callers use their stable opportunity identity",
+    "outcome_rule": "sigmoid(intercept + distinct shared interests * weight + category preference * weight + device offset + hidden user + hidden ad)",
+    "outcome_version": "click-world-v1",
+    "python_version": "3.10.11",
+    "sanity_rates": {
+      "matched": {
+        "clicks": 12140,
+        "impressions": 332551,
+        "observed_ctr": 0.036505678828209806
+      },
+      "unmatched": {
+        "clicks": 10211,
+        "impressions": 667449,
+        "observed_ctr": 0.01529854715491371
+      }
+    },
+    "simulated_time_range": {
+      "last_impression": "2026-01-12T13:46:39+00:00",
+      "max_click_delay_seconds": 300,
+      "start": "2026-01-01T00:00:00+00:00"
+    },
+    "split_definitions": {
+      "policy": "chronological 70/15/15 by (impressed_at, impression_id); label stays with impression",
+      "test_end_exclusive": 1000000,
+      "train_end_exclusive": 700000,
+      "validation_end_exclusive": 850000
+    },
+    "status": "complete",
+    "streams": {
+      "click-delay": "71096229430488508694524915458132025424675370014771247966414382140927924292701",
+      "exposure": "99936351594030396278742444328067778514271420762193003074312083518278658343674",
+      "hidden": "97911527025169700373674657016790786650197737720921512163237782641606334247968",
+      "outcomes": "78721870607270054775612510215131899335096344263766858131344730318437659064014"
+    }
+  },
+  "runtime": {
+    "python": "3.10.11",
+    "system": "Windows",
+    "machine": "AMD64",
+    "processor": "AMD64 Family 23 Model 104 Stepping 1, AuthenticAMD",
+    "logical_cpus": 16
+  },
+  "source_sha256": {
+    "app\\history\\artifacts.py": "8eab9154bbc6d960e3f5e9a263cb3b9d3c79fd19fb0ef0d30194154ffb8814af",
+    "app\\history\\cli.py": "32a65a8da6dfc2c5f86671eb7ee1abbc6dc303f09fb85d0b1c63c041ea2ca11b",
+    "app\\history\\outcomes.py": "112da97381cb3eac76b09d6ff9986f721e110175359ce0a0867dcc329fb2bcf1",
+    "app\\history\\source.py": "2ed2c33c0071dfb270a5063fe84bc45c7436cd2dc0273f730d6c363217d490c3",
+    "app\\history\\__init__.py": "f614c4825a8c8a0a785c0d2b3fbbee800bc784b307658658385ac757af5c94d6"
+  },
+  "resource_note": "CLI wall/CPU includes export and file generation, excludes entity preparation; process-wide cumulative peak working set, repeat reuses process, not incremental memory"
+}
