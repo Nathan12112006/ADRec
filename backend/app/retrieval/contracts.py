@@ -44,6 +44,12 @@ class RetrievalResult(BaseModel):
     vector_version: Literal["binary-cosine-v1"] = "binary-cosine-v1"
     requested_count: CandidateLimit
     elapsed_ms: float = Field(ge=0, allow_inf_nan=False)
+    vector_elapsed_ms: float = Field(default=0, ge=0, allow_inf_nan=False)
+    metadata_elapsed_ms: float = Field(default=0, ge=0, allow_inf_nan=False)
+    fallback_elapsed_ms: float = Field(default=0, ge=0, allow_inf_nan=False)
+    searched_count: int = Field(default=0, strict=True, ge=0)
+    expansion_count: int = Field(default=0, strict=True, ge=0)
+    fallback_scanned_count: int = Field(default=0, strict=True, ge=0)
     fallback_reason: (
         Literal[
             "empty_interests",

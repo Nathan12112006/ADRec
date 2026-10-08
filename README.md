@@ -8,8 +8,8 @@ Health checks, structured request logging and a backend/PostgreSQL Docker demo a
 Phase 1's technical gate passed on 2026-10-07: fresh migrations/default seeding,
 Docker and local startup, lifecycle replay/count reconciliation, database-outage health
 behavior, and 186 unit/PostgreSQL tests. See [ticket 10's commands and evidence](.scratch/adflow-implementation/issues/10-phase-one-gate.md).
-Phase 2 topic vectors, candidate-retrieval contracts and offline exact FAISS snapshots
-are available. Serving integration, CTR modeling,
+Phase 2 topic vectors, offline exact FAISS snapshots and current-inventory candidate
+retrieval with marked fallback are available. Serving integration, CTR modeling,
 experiments, Redis, dashboards and performance benchmarks remain planned work.
 The separate [lifecycle learning checkpoint](.scratch/adflow-implementation/issues/57-learning-lifecycle.md)
 remains open; passing software checks does not certify human understanding.
@@ -241,7 +241,8 @@ uv run --locked alembic upgrade head --sql
 The default target is the application URL. `-x database=test` explicitly selects the isolated
 test URL; unknown target names fail. `check` detects ORM/schema drift; `--sql` generates SQL
 without connecting. Repeated upgrades at head preserve all data. Revision `0001` creates
-the schema and revision `0002` protects durable history. Downgrades are intentionally
+the schema, revision `0002` protects durable history, and revision `0003` tracks catalog
+freshness separately from immutable provenance. Downgrades are intentionally
 unsupported: use a newly named disposable database to repeat a fresh setup.
 
 ## Synthetic entity seeds
@@ -370,8 +371,8 @@ trips; the pure similarity helper clamps tiny rounding overshoots at one. A voca
 or vector-rule change requires a new version and compatible rebuilt artifacts. Seeding
 imports the same ordered topics; its manifest format and dataset identities are unchanged.
 
-`CandidateRetriever.retrieve(user, limit=500)` is a typed interface, with no concrete
-search implementation yet. `RetrievalUser` supplies user ID, dataset ID and interests.
+`CandidateRetriever.retrieve(user, limit=500)` is a typed interface implemented by
+`CurrentCandidateRetriever`. `RetrievalUser` supplies user ID, dataset ID and interests.
 `RetrievalCandidate` supplies stable ad/advertiser/dataset IDs, current ad payload,
 decimal bid, eligibility flags and nullable similarity. Constructing a candidate rejects
 inactive flags, invalid IDs/money/topics and nonfinite/out-of-range similarity. Callers
@@ -388,8 +389,7 @@ It rejects duplicate/excess candidates and inconsistent order/diagnostics:
 | `exact_fallback` | Same cosine order | No active index; `missing_index`, `corrupt_index`, `incompatible_index`, `stale_index` or `insufficient_candidates` |
 | `nonpersonalized` | Descending bid, ascending ad ID; similarity is null | No index; `empty_interests` |
 
-Empty-interest users bypass cosine search. The nonpersonalized contract specifies bid
-order; its actual current-inventory implementation belongs to ticket 13. Limited inventory
+Empty-interest users bypass cosine search and use current-inventory bid/ID ordering. Limited inventory
 may yield fewer candidates or zero. Database failures must propagate to the existing 503
 handling rather than masquerade as empty inventory. Retrieval timing must include metadata,
 filtering, expansion and fallback, and use a monotonic clock in concrete implementations.
@@ -399,7 +399,7 @@ Boundary ties may have interchangeable membership; returned members still follow
 
 `ADFLOW_RETRIEVAL_CANDIDATE_LIMIT` defaults to 500 and accepts 1–500;
 `ADFLOW_RETRIEVAL_SEARCH_LIMIT` defaults to 4,000 and accepts 1–1,000,000, at least the
-candidate limit. The latter bounds future filtered-search expansion before exact fallback;
+candidate limit. The latter bounds filtered-search expansion before exact fallback;
 it does not cap eligible-inventory fallback scans or represent a measured tuning result.
 Both settings load locally and pass through Compose. They do not alter Phase 1 serving yet.
 
@@ -445,9 +445,9 @@ complete manifest, and `load` optionally reports vector-search hits. `--threads`
 to one (accepts 1–64) and configures this offline command's native threads. Search returns
 database IDs, not FAISS row positions. It orders returned members by descending cosine
 then ascending ad ID; membership among equal boundary scores may differ. Low-level search
-accepts 1–1,000,000 hits to support future bounded expansion; downstream candidate results
-remain capped at 500. Empty-user nonpersonalized retrieval belongs to ticket 13 and is not
-a cosine-query option in this CLI.
+accepts 1–1,000,000 hits for bounded expansion; downstream candidate results
+remain capped at 500. Empty-user nonpersonalized retrieval is separate from the
+cosine-query option in this CLI.
 
 Compose's project-scoped `index_artifacts` volume mounts at `/artifacts`, owned by runtime
 UID/GID 10001. Normal `down` retains this volume alongside PostgreSQL data. Build/reload
@@ -466,13 +466,14 @@ Root `artifacts/` is ignored by Git; preserve needed artifacts separately. The c
 runs source directly, so its command is `python -m app.retrieval.cli`; local editable
 installation also supplies `adflow-index`.
 
-`read_catalog(session, dataset_id)` scans one dataset's ads and advertiser eligibility in
-one PostgreSQL MVCC statement snapshot. It fingerprints relevant current ad metadata,
-including inactive rows, then exports only active ads with active advertisers. The
-`catalog-v1` content digest includes dataset identity, ad IDs, metadata, bids and eligibility;
-normal catalog edits change it. Invalid eligible topics abort the build. This offline
-fingerprint scan does not implement request-time catalog change detection; ticket 13
-owns freshness integration and exact-current-inventory fallback.
+`read_catalog(session, dataset_id)` exports active ads with active advertisers while holding
+a shared lock on that dataset's catalog revision row until the caller ends the transaction.
+Catalog writers cannot commit during this offline export, pairing the recorded revision with
+one coherent inventory. The CLI closes the export transaction before building FAISS artifacts.
+Invalid eligible topics abort the build. Migration `0003` introduces separate mutable
+`catalog_revisions`; dataset provenance remains immutable. Its `catalog-v2:<dataset>:<revision>`
+token replaces ticket 12's content fingerprint. Rebuild older `catalog-v1` snapshots after
+migration; retrieval marks them stale. Existing datasets receive an initial revision row.
 
 Each version contains `index.faiss`, `ids.json` (sorted positive int64 database IDs paired
 with sequential FAISS rows), and `manifest.json`. The manifest records schema/builder and
@@ -501,12 +502,96 @@ the same complete version path; there is no automatic cross-process rollout. CLI
 validates/loads only its own process and exits; it does not change a running API worker.
 The running API does not yet use this manager—ticket 15 owns serving integration.
 
-For N catalog ads and D=13 dimensions, export/vector preparation is O(N*D) work plus metadata
-hashing; sorting IDs is O(N log N). Flat stores O(N*D) float32 data plus IDs. Build/load hold
+Failed reloads raise `SnapshotLoadError` with a missing/corrupt/incompatible/stale reason.
+`active.status()` atomically returns the retained snapshot and latest failure reason.
+Existing readers keep their acquired reference; new candidate retrieval uses marked exact
+fallback after a failed reload until a successful explicit reload clears the degraded state.
+
+For N catalog ads and D=13 dimensions, export/vector preparation is O(N*D) work;
+sorting IDs is O(N log N). Flat stores O(N*D) float32 data plus IDs. Build/load hold
 serialized and native copies, with additional O(N*D) memory; validation scans every vector
 and uses batches of at most 1,000. Flat search scans stored vectors, with candidate
 selection/sorting overhead. These are algorithm costs, not benchmarks or a 100,000-ad claim.
 Normalized inner-product behavior follows [FAISS metric documentation](https://github.com/facebookresearch/faiss/wiki/MetricType-and-distances).
+
+## Current-inventory candidate retrieval
+
+`CurrentCandidateRetriever(session, active, search_limit=4000)` implements the public
+`CandidateRetriever.retrieve(user, limit=500)` interface. It returns detached current
+metadata for at most 500 distinct eligible ads. Callers own the PostgreSQL session and
+transaction and pass configured limits explicitly; this adapter does not record recommendations.
+Example after migrations, seeding and explicit snapshot preparation:
+
+```python
+from pathlib import Path
+from uuid import UUID
+from app.core.config import load_settings
+from app.db.session import Database
+from app.retrieval.contracts import RetrievalUser
+from app.retrieval.current import CurrentCandidateRetriever
+from app.retrieval.snapshots import ActiveSnapshot
+
+settings = load_settings()
+database = Database(settings)
+active = ActiveSnapshot()
+active.reload(Path("../artifacts/exact-local-v1"))
+try:
+    with database.session() as session:
+        result = CurrentCandidateRetriever(
+            session, active, search_limit=settings.retrieval_search_limit
+        ).retrieve(
+            RetrievalUser(id=1, dataset_id=UUID("<seed dataset UUID>"), interests=("technology",)),
+            limit=settings.retrieval_candidate_limit,
+        )
+        print(result.model_dump_json())
+finally:
+    database.dispose()
+```
+
+Database triggers advance the revision transactionally for ad/advertiser inserts, edits and
+deletes, including bulk SQL; rollbacks roll back revisions. No-op updates do not advance it.
+Truncating either inventory table conservatively invalidates all catalog revisions. Advertiser
+name edits also invalidate conservatively. Ordinary indexed retrieval reads the revision by
+primary key before searching and again after metadata/filtering; it does not fingerprint or
+scan all catalog rows to detect changes. Keep database triggers enabled and revision rows
+database-managed. Restore/reseed operations require fresh artifacts.
+
+An indexed query batch-fetches metadata for returned IDs with a typed PostgreSQL array
+([SQLAlchemy ANY support](https://docs.sqlalchemy.org/en/20/core/sqlelement.html#sqlalchemy.sql.expression.any_)),
+so large configured expansions do not exhaust bind parameters. Missing, inactive and
+wrong-dataset rows are excluded. Search doubles to the configured bound when filtering
+shrinks results. A revision/dataset mismatch or mid-retrieval catalog change marks the
+index stale. Missing/corrupt/incompatible reloads and insufficient filtered candidates also
+use current eligible-inventory exact fallback, with explicit `fallback_reason` and no claimed
+active index version. Fallback streams one PostgreSQL statement snapshot, scores every
+eligible vector, and retains a bounded heap of candidates; it never rebuilds a serving index.
+Empty interests use a bounded PostgreSQL bid-descending/ID-ascending query, with null cosine
+scores. Zero eligible ads returns an empty successful result; database failures or invalid
+current catalog data raise safe `WorkflowError(503, "retrieval_unavailable", ...)`.
+
+`elapsed_ms` includes revision lookup, vector search, metadata, expansion and fallback.
+`vector_elapsed_ms` times only index searches; `fallback_elapsed_ms` times the full fallback
+query/scoring; `metadata_elapsed_ms` is the remaining metadata/orchestration time.
+`searched_count` sums returned index hits across all queries (including repeats),
+`expansion_count` counts additional queries, and `fallback_scanned_count` counts eligible
+vectors scored in cosine fallback. It is zero for nonpersonalized SQL ordering; PostgreSQL
+may still scan/sort eligible rows. Analyze fallback separately from nominal indexed latency.
+
+Exact fallback costs O(N*D + N log K) time with O(K + B) candidate/streaming space for
+eligible count N, candidate cap K and database fetch batch B=1000. Index expansion repeats
+flat scans and holds up to the configured bound of IDs in memory. Revision writes serialize
+per dataset and offline export locks delay catalog commits; contention is a tradeoff to measure.
+Default READ COMMITTED sessions observe committed changes between queries. Retrieval does
+not lock selected ads: existing selection-time ad/advertiser locking and revalidation remain
+mandatory. Phase 1 serving retains those protections; ticket 15 will integrate this adapter.
+No ANN improvement, HNSW promotion, 100k-ad performance result or Phase 2 gate is claimed.
+
+Focused checks from `backend/` with the isolated test database configured:
+
+```powershell
+$env:ADFLOW_RUN_POSTGRES_TESTS='1'
+uv run --locked pytest tests/integration/test_candidate_retrieval.py tests/integration/test_index_catalog.py tests/unit/test_index_snapshots.py
+```
 
 Focused checks from `backend/` (PostgreSQL opt-in as above):
 
@@ -799,6 +884,7 @@ application-only deduplication; no throughput claim is made.
 | `backend/app/seeding/` | Versioned entity generator, atomic append/no-op persistence, seed CLI |
 | `backend/app/core/topics.py` and `backend/app/retrieval/` | Shared ordered vocabulary, normalized membership vectors, validated candidate-retrieval contracts and limits |
 | `backend/app/db/catalog.py` and `backend/app/retrieval/snapshots.py`, `cli.py` | Offline eligible catalog export, immutable exact FAISS artifacts, validated process-local reload and explicit CLI |
+| `backend/app/retrieval/current.py` | Current metadata filtering, bounded expansion, revision checks and marked exact/nonpersonalized fallback |
 | `backend/app/ranking/` and `backend/app/db/selection.py` | Pure deterministic baseline and streamed eligible-inventory reader |
 | `backend/app/services/recommendations.py` and `backend/app/core/errors.py` | Atomic recommendation/no-ad opportunities, durable replay and safe workflow failures |
 | `backend/app/services/events.py` and `backend/app/core/clock.py` | Idempotent client events, captured-bid credit and shared server UTC clock |

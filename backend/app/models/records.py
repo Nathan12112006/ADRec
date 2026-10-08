@@ -39,6 +39,14 @@ class Dataset(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class CatalogRevision(Base):
+    __tablename__ = "catalog_revisions"
+    __table_args__ = (CheckConstraint("revision >= 0", name="catalog_revision_nonnegative"),)
+
+    dataset_id: Mapped[UUID] = mapped_column(ForeignKey("datasets.id"), primary_key=True)
+    revision: Mapped[int] = mapped_column(BigInteger, server_default="0")
+
+
 class User(Base):
     __tablename__ = "users"
     __table_args__ = (

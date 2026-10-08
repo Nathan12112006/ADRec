@@ -143,14 +143,29 @@ def build_snapshot(
     return complete
 
 
+SnapshotFailure = Literal["missing_index", "corrupt_index", "incompatible_index", "stale_index"]
+
+
+class SnapshotLoadError(ValueError):
+    def __init__(self, reason: SnapshotFailure, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
 def _read_artifact(directory: Path, filename: str) -> bytes:
     try:
         return (directory / filename).read_bytes()
+    except FileNotFoundError as error:
+        raise SnapshotLoadError(
+            "missing_index", "missing or unreadable snapshot artifacts"
+        ) from error
     except OSError as error:
-        raise ValueError("missing or unreadable snapshot artifacts") from error
+        raise SnapshotLoadError(
+            "corrupt_index", "missing or unreadable snapshot artifacts"
+        ) from error
 
 
-def load_snapshot(
+def _load_snapshot(
     directory: Path,
     *,
     expected_catalog_version: str | None = None,
@@ -162,18 +177,34 @@ def load_snapshot(
         SnapshotManifest.model_fields
     ):
         raise ValueError("snapshot manifest must explicitly declare every schema field")
+    for name in (
+        "schema_version",
+        "builder_version",
+        "index_type",
+        "metric",
+        "vocabulary_version",
+        "vector_version",
+        "dimension",
+        "dtype",
+    ):
+        if raw_manifest[name] != SnapshotManifest.model_fields[name].default:
+            raise SnapshotLoadError(
+                "incompatible_index", "incompatible snapshot schema or vector settings"
+            )
     manifest = SnapshotManifest.model_validate(raw_manifest)
     if manifest.topics != TOPICS:
-        raise ValueError("incompatible vocabulary order")
+        raise SnapshotLoadError("incompatible_index", "incompatible vocabulary order")
     if manifest.runtime != current_runtime():
-        raise ValueError("incompatible snapshot runtime; rebuild in the serving runtime")
+        raise SnapshotLoadError(
+            "incompatible_index", "incompatible snapshot runtime; rebuild in the serving runtime"
+        )
     if (
         expected_catalog_version is not None
         and manifest.catalog_version != expected_catalog_version
     ):
-        raise ValueError("stale catalog snapshot")
+        raise SnapshotLoadError("stale_index", "stale catalog snapshot")
     if expected_dataset_id is not None and manifest.dataset_id != expected_dataset_id:
-        raise ValueError("snapshot belongs to a different dataset")
+        raise SnapshotLoadError("stale_index", "snapshot belongs to a different dataset")
     mapping_bytes = _read_artifact(directory, "ids.json")
     index_bytes = _read_artifact(directory, "index.faiss")
     if hashlib.sha256(mapping_bytes).hexdigest() != manifest.mapping_sha256:
@@ -207,16 +238,45 @@ def load_snapshot(
     return ExactSnapshot(manifest, ids, index)
 
 
+def load_snapshot(
+    directory: Path,
+    *,
+    expected_catalog_version: str | None = None,
+    expected_dataset_id: UUID | None = None,
+) -> ExactSnapshot:
+    try:
+        return _load_snapshot(
+            directory,
+            expected_catalog_version=expected_catalog_version,
+            expected_dataset_id=expected_dataset_id,
+        )
+    except SnapshotLoadError:
+        raise
+    except ValueError as error:
+        raise SnapshotLoadError("corrupt_index", str(error)) from error
+
+
+@dataclass(frozen=True)
+class SnapshotState:
+    snapshot: ExactSnapshot | None
+    failure_reason: SnapshotFailure | None
+
+
 class ActiveSnapshot:
     """Validate replacements offline, then swap only a complete immutable reference."""
 
     def __init__(self) -> None:
         self._lock = Lock()
         self._active: ExactSnapshot | None = None
+        self._failure_reason: SnapshotFailure | None = None
 
     def acquire(self) -> ExactSnapshot | None:
         with self._lock:
             return self._active
+
+    def status(self) -> SnapshotState:
+        with self._lock:
+            return SnapshotState(self._active, self._failure_reason)
 
     def reload(
         self,
@@ -225,11 +285,17 @@ class ActiveSnapshot:
         expected_catalog_version: str | None = None,
         expected_dataset_id: UUID | None = None,
     ) -> ExactSnapshot:
-        replacement = load_snapshot(
-            directory,
-            expected_catalog_version=expected_catalog_version,
-            expected_dataset_id=expected_dataset_id,
-        )
+        try:
+            replacement = load_snapshot(
+                directory,
+                expected_catalog_version=expected_catalog_version,
+                expected_dataset_id=expected_dataset_id,
+            )
+        except SnapshotLoadError as error:
+            with self._lock:
+                self._failure_reason = error.reason
+            raise
         with self._lock:
             self._active = replacement
+            self._failure_reason = None
         return replacement

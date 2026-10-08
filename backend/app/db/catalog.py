@@ -1,14 +1,12 @@
 """Offline catalog export from one PostgreSQL statement snapshot."""
 
-import hashlib
-import json
 from dataclasses import dataclass
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.records import Ad, Advertiser, Dataset
+from app.models.records import Ad, Advertiser, CatalogRevision
 from app.retrieval.snapshots import IndexEntry
 from app.retrieval.vectors import ad_vector
 
@@ -20,16 +18,23 @@ class IndexCatalog:
     entries: tuple[IndexEntry, ...]
 
 
-def read_catalog(session: Session, dataset_id: UUID) -> IndexCatalog:
-    """Fingerprint all dataset ad metadata; export only currently eligible vectors.
+def catalog_version(session: Session, dataset_id: UUID, *, lock: bool = False) -> str:
+    statement = select(CatalogRevision.revision).where(CatalogRevision.dataset_id == dataset_id)
+    if lock:
+        statement = statement.with_for_update(read=True)
+    revision = session.scalar(statement)
+    if revision is None:
+        raise ValueError("unknown dataset or missing catalog revision")
+    return f"catalog-v2:{dataset_id}:{revision}"
 
-    The ordered join is one MVCC statement snapshot, so concurrent edits cannot pair
-    the version of one catalog with vectors from another. Caller owns the transaction.
-    This full offline scan is not a request-time freshness check.
+
+def read_catalog(session: Session, dataset_id: UUID) -> IndexCatalog:
+    """Export eligible vectors while holding the database-maintained revision stable.
+
+    A shared revision-row lock prevents catalog writers from committing until the
+    caller ends its transaction. Dataset provenance remains immutable. Run this offline.
     """
-    if session.get(Dataset, dataset_id) is None:
-        raise ValueError("unknown dataset")
-    digest = hashlib.sha256(f"catalog-v1/{dataset_id}".encode())
+    version = catalog_version(session, dataset_id, lock=True)
     statement = (
         select(
             Ad.id,
@@ -52,10 +57,6 @@ def read_catalog(session: Session, dataset_id: UUID) -> IndexCatalog:
     entries = []
     with session.execute(statement) as rows:
         for row in rows.mappings():
-            digest.update(
-                b"\n"
-                + json.dumps(dict(row), default=str, sort_keys=True, separators=(",", ":")).encode()
-            )
             if row["active"] and row["advertiser_active"]:
                 entries.append(
                     IndexEntry(
@@ -63,4 +64,4 @@ def read_catalog(session: Session, dataset_id: UUID) -> IndexCatalog:
                         vector=ad_vector(row["interests"], category=row["category"]),
                     )
                 )
-    return IndexCatalog(dataset_id, "catalog-v1:" + digest.hexdigest(), tuple(entries))
+    return IndexCatalog(dataset_id, version, tuple(entries))
