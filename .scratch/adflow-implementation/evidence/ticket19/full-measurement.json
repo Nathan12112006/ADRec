@@ -1,0 +1,29 @@
+{
+  "python_version": "3.10.11",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "runs": [
+    {
+      "run": "first",
+      "wall_seconds": 51.042400200036354
+    },
+    {
+      "run": "repeat",
+      "wall_seconds": 53.668710799887776
+    }
+  ],
+  "repeat_manifest_equal": true,
+  "audit": {
+    "first": {
+      "impressions": 1000000,
+      "clicks": 22351,
+      "passed": true
+    },
+    "repeat": {
+      "impressions": 1000000,
+      "clicks": 22351,
+      "passed": true
+    }
+  },
+  "source_history_id": "2ed92061-8b66-59b4-8a1b-509f340d47d0",
+  "limitation": "Local offline wall costs; sequential runs before audits; no serving/model claim."
+}

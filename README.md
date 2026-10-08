@@ -840,6 +840,55 @@ preparation, not a hardware-independent promise or serving-capacity result. Raw 
 remain under ignored `artifacts/history-ticket18-full/`; committed manifests, resource
 observations and streaming audit results are under the ticket's evidence directory.
 
+## Shared CTR features and chronological data splits
+
+Prepare features from a complete historical artifact explicitly, from `backend/`:
+
+```powershell
+uv run --locked python -m app.ctr.dataset --history ../artifacts/history-demo --output ../artifacts/ctr-features-demo
+uv run --locked pytest tests/unit/test_ctr_features.py tests/unit/test_ctr_dataset.py
+```
+
+`app.ctr.features.build_features(user, ad)` is the shared offline/serving builder.
+`ctr-features-v1` contains exactly five raw fields: `shared_interest_count` (distinct
+intersection of user interests and ad target interests), `category_match` (ad category
+in user interests), `ad_category`, `device_type` (source `device`) and `age_group`.
+Empty interests produce zero/false. Null, absent or empty categorical values become
+the reserved string `__missing__`. Unseen nonempty categorical strings are preserved;
+training-only fitted encoding with unknown handling belongs to the later persisted
+model pipeline. No category vocabulary or numeric preprocessing is fitted here.
+
+`write_feature_splits(history, output)` verifies source version/completion, all three
+file hashes, snapshot counts, distinct identities, exposure references, chronological
+click consistency and complete binary labels. It reads frozen `users.jsonl` and
+`ads.jsonl`, never current database profiles. Each output row separates its five
+`features` from `impression_id`, `impressed_at` and `label`. IDs, bid, experiment
+variant, activity, country, category preferences, hidden probabilities, outcomes and
+historical aggregates cannot become feature fields. Source files/provenance can
+retain excluded fields; model inputs must select only the nested `features` object.
+
+Rows are sorted by UTC impression time, then integer impression ID. The first
+`floor(0.70*N)` rows are training, the next through `floor(0.85*N)` validation, and
+the remainder final test. A late click stays with its impression's label. Small
+datasets can have empty splits; the manifest records null boundaries for those
+splits. Model training will separately require adequate class support.
+
+Output contains `train.jsonl`, `validation.jsonl`, `test.jsonl` and a final complete
+`manifest.json`, with `ctr-chronological-70-15-15-v1`, feature schema, counts/click
+counts, first/last time/identity keys, exclusive row boundaries, output hashes and
+source history/dataset identity, manifest hash, source hashes and generator configuration.
+Existing output is refused. Failures after output creation retain `status.json`
+without a complete manifest; use a new directory after fixing the input/filesystem.
+CLI exit codes are 0 for success, 2 for rejected inputs/existing output and 3 for
+filesystem/SQLite failure. The command needs neither database configuration nor
+PostgreSQL access and never generates history or trains at startup.
+
+Catalog memory is O(users + ads); exposures are processed one row at a time.
+A temporary SQLite sort uses O(N) disk and O(N log N) sorting work, with an 8 MiB
+page-cache target and file-backed temporary storage. This is not a total-process
+memory cap. Temporary files are removed after closing the connection, including
+on Windows. Keep enough free disk for the temporary database/sort and output.
+
 ## Candidate-retrieval technical gate
 
 [Ticket 17](.scratch/adflow-implementation/issues/17-retrieval-gate.md) records the
