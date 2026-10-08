@@ -1,0 +1,42 @@
+{
+  "runtime": {
+    "faiss_version": "1.15.1",
+    "numpy_version": "2.2.6",
+    "python_version": "3.12.15",
+    "system": "Linux",
+    "machine": "x86_64",
+    "byteorder": "little",
+    "faiss_build": "OPTIMIZE DD AVX2 "
+  },
+  "threads": 1,
+  "results": [
+    {
+      "family": "flat",
+      "ids": [
+        42,
+        9001,
+        700
+      ],
+      "scores": [
+        1.0,
+        0.7071067690849304,
+        0.0
+      ],
+      "corrupt_reload_retained_active": true
+    },
+    {
+      "family": "hnsw",
+      "ids": [
+        42,
+        9001,
+        700
+      ],
+      "scores": [
+        1.0,
+        0.7071067690849304,
+        0.0
+      ],
+      "corrupt_reload_retained_active": true
+    }
+  ]
+}

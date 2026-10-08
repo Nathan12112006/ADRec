@@ -9,7 +9,10 @@ Phase 1's technical gate passed on 2026-10-07: fresh migrations/default seeding,
 Docker and local startup, lifecycle replay/count reconciliation, database-outage health
 behavior, and 186 unit/PostgreSQL tests. See [ticket 10's commands and evidence](.scratch/adflow-implementation/issues/10-phase-one-gate.md).
 Phase 2 topic vectors, CPU Flat/HNSW snapshots and current-inventory candidate
-retrieval with marked fallback and bounded recommendation serving are available. CTR modeling,
+retrieval with marked fallback and bounded recommendation serving are available. The
+[Phase 2 technical gate](.scratch/adflow-implementation/issues/17-retrieval-gate.md)
+passed on 2026-10-08; Flat remains the serving default after HNSW failed promotion.
+CTR modeling,
 experiments, Redis, dashboards and HTTP load tests remain planned work.
 The separate [lifecycle learning checkpoint](.scratch/adflow-implementation/issues/57-learning-lifecycle.md)
 remains open; passing software checks does not certify human understanding.
@@ -745,6 +748,41 @@ Focused verification with the isolated PostgreSQL test database enabled:
 ```powershell
 uv run --locked pytest tests/unit/test_retrieval_evaluation.py tests/unit/test_retrieval_benchmark_cli.py tests/integration/test_retrieval_benchmark.py
 ```
+
+## Candidate-retrieval technical gate
+
+[Ticket 17](.scratch/adflow-implementation/issues/17-retrieval-gate.md) records the
+2026-10-08 gate commands and checks. The saved native comparisons used 1,000 and
+100,000 eligible ads, limit 500, one FAISS thread/caller, and three component repetitions.
+On the full dataset, Flat retrieval P95 was 40.715ms; the HNSW path including fallback
+was 6631.704ms, with minimum query tie-aware recall 0.0 and 10% personalized fallback.
+HNSW remains an explicit comparison option. Flat remains the default. The
+[complete comparison](.scratch/adflow-implementation/evidence/ticket16/results.md)
+includes separate empty-interest populations, memory/build costs, query variation,
+and full-ad ranking. These saved observations are component evidence; this gate audits
+them rather than claiming a fresh performance run or HTTP capacity result.
+
+Flat still scans N indexed vectors: O(N*D) similarity work for D topic dimensions.
+Its candidate set bounds downstream ranking to C <= 500 by default; this is distinct
+from avoiding a catalog scan. Exact fallback scans current eligible inventory and
+still bounds ranking to C. HNSW adds graph storage/build work and data-dependent search;
+neither lower vector-only latency nor high mean recall establishes a better complete
+pipeline. At 100,000 ads, even exact similarity retrieval changed the overlap-ranking
+winner in 33 of 90 samples relative to full-ad ranking. Candidate recall and ranking
+quality answer different questions.
+
+Use the index preparation commands above to build a **new** immutable snapshot after
+catalog, vocabulary or runtime changes, then explicitly restart/reload with its path.
+Never reuse native Windows artifacts as compatible Linux artifacts. Until a compatible
+snapshot is ready, missing/stale/corrupt/incompatible indexes use visible exact fallback
+over current eligible ads; empty interests use bid/ID ordering without cosine scores.
+There is no request-time rebuild. PostgreSQL failure remains 503.
+
+The [retrieval learning checkpoint](.scratch/adflow-implementation/issues/58-learning-retrieval.md)
+is now available and remains open. Explain why faster vector search alone does not
+prove a better retrieval pipeline, then direct a small candidate-limit/search-depth
+change and verify its candidate counts, tie-aware quality and cost. Phase 3 technical
+work is unblocked; human understanding is recorded separately.
 
 ## Recommendation workflow
 
