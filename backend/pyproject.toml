@@ -16,7 +16,13 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["httpx2>=2,<3", "pytest>=8.3,<10", "ruff>=0.9,<1", "mypy>=1.14,<2"]
+dev = [
+  "hatchling>=1.27,<2",
+  "httpx2>=2,<3",
+  "pytest>=8.3,<10",
+  "ruff>=0.9,<1",
+  "mypy>=1.14,<2",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]

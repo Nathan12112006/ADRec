@@ -24,8 +24,10 @@ Open [Swagger UI](http://127.0.0.1:8000/docs) or
 `app.main` alone needs no configuration; calling `create_app()` validates configuration.
 Startup does not connect to a database or create tables. Stop the server with Ctrl+C.
 
-`uv.lock` pins the entire dependency graph, including development and build dependencies;
-`--locked` rejects stale project metadata. Dependency updates must deliberately regenerate
+`uv.lock` pins runtime, development, and build dependencies. Hatchling is included in the
+development group so `uv build --no-build-isolation` uses the locked environment instead
+of independently resolving a build backend. `--locked` rejects stale project metadata.
+Dependency updates must deliberately regenerate
 the lock with `uv lock`, then repeat the checks below. `.venv` and local secrets are ignored.
 
 ## Configuration
@@ -68,7 +70,7 @@ uv run --locked mypy
 uv run --locked ruff check .
 uv run --locked ruff format --check .
 uv run --locked pytest
-uv build
+uv build --no-build-isolation
 ```
 
 The unit tests use no PostgreSQL connection and never reset a database. TestClient exercises
