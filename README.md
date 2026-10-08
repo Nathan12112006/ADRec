@@ -9,7 +9,7 @@ Phase 1's technical gate passed on 2026-10-07: fresh migrations/default seeding,
 Docker and local startup, lifecycle replay/count reconciliation, database-outage health
 behavior, and 186 unit/PostgreSQL tests. See [ticket 10's commands and evidence](.scratch/adflow-implementation/issues/10-phase-one-gate.md).
 Phase 2 topic vectors, CPU Flat/HNSW snapshots and current-inventory candidate
-retrieval with marked fallback are available. Serving integration, CTR modeling,
+retrieval with marked fallback and bounded recommendation serving are available. CTR modeling,
 experiments, Redis, dashboards and performance benchmarks remain planned work.
 The separate [lifecycle learning checkpoint](.scratch/adflow-implementation/issues/57-learning-lifecycle.md)
 remains open; passing software checks does not certify human understanding.
@@ -351,10 +351,9 @@ the dedicated test database and run this suite serially, as with the other integ
 
 ## Topic vectors and candidate-retrieval contract
 
-Ticket 11 adds pure vector construction and validated retrieval inputs/results; ticket 12
-adds offline exact FAISS snapshots below. The HTTP recommendation workflow still uses
-the Phase 1 overlap selector. Database-backed filtering/backfill, nonpersonalized retrieval
-and serving integration arrive in subsequent Phase 2 tickets; no speedup is claimed here.
+Topic vectors and validated retrieval inputs/results feed offline FAISS snapshots and
+current-inventory filtering/fallback. Recommendation serving ranks only the retrieved
+candidate set with the Phase 1 overlap selector; no speedup is claimed here.
 
 `app.core.topics.TOPICS` preserves the seed generator's 13-topic order, versioned as
 `topics-v1`. `app.retrieval.vectors.user_vector(interests)` returns a frozen `TopicVector`
@@ -682,18 +681,25 @@ creation plus 24 hours, reuse returns 410 and requires a fresh key. Unknown user
 404. Invalid keys get 422. Required database reads, writes, commit errors and pool/lock
 timeouts get a safe 503; API adapters translate these workflow statuses into HTTP responses.
 
-The service scans only ads in the user's dataset, respecting the existing composite
-foreign keys that prevent cross-dataset recommendations. The inventory reader accepts
-an optional `dataset_id`; its original unrestricted selector interface remains available.
+The service retrieves only ads in the user's dataset, respecting the existing composite
+foreign keys that prevent cross-dataset recommendations. It ranks at most
+`ADFLOW_RETRIEVAL_CANDIDATE_LIMIT` candidates (default/max 500), using distinct shared
+interests, then bid, then ascending ID. Retrieval similarity determines membership,
+not the ranking score; limiting membership can change the full-catalog winner.
 The user profile is share-locked for a new decision. After selection, the service
-share-locks the chosen ad and advertiser, rechecks activity, bid and target interests,
+share-locks the chosen ad and advertiser, rechecks activity, bid, target interests,
+category and advertiser identity,
 then snapshots the locked payload and distinct overlap score together. A changed winner
-restarts the transaction/scan, up to three attempts; sustained changes yield retryable
+restarts the transaction/retrieval, up to three attempts; sustained changes yield retryable
 503. Other ads may change during a scan; this is coherent winner revalidation, not a
 serializable snapshot of all inventory.
 
 Selected ad payloads include decimal bid (stored as a JSON string), overlap score and
 meaning, strategy `interest-overlap`, version `baseline-v1` and null predicted CTR.
+New selections also retain a compact `retrieval` object with mode, snapshot/vector identity,
+requested/returned counts, fallback reason, expansion/scanned counters and retrieval timings.
+Candidate payloads are omitted. Existing pre-integration selections replay with null retrieval
+context. Replay never retrieves or ranks, even after an index swap or load failure.
 The recommendation bid column and JSON snapshot come from the same decision, with one
 server UTC creation time shared by the recommendation and key. Replay reads this
 durable payload, never the current ad. The optional callable `clock` is a server-side
@@ -706,13 +712,35 @@ the winner in a new transaction. Only the request-key primary-key violation is t
 as a replay race; other database failures become 503. A response lost after commit is
 safe to retry with the same key. No history cleanup or key recycling is performed.
 
-New decisions retain the baseline scan costs and add indexed user/key/snapshot lookups,
+New decisions add bounded ranking to retrieval and indexed user/key/snapshot lookups,
 bounded revalidation and two inserts (one for no-ad). Replays use indexed durable
-lookups and no inventory scan. History grows with opportunities; no performance claim
+lookups and no inventory scan. Missing/stale/unusable indexes may require exact retrieval
+over all eligible ads; limiting ranking does not eliminate that scan. History grows with opportunities; no performance claim
 is made. Row locks can delay inventory editors; configured lock/statement timeouts bound
 database waits, not an end-to-end request deadline. This follows
 [SQLAlchemy transaction contexts](https://docs.sqlalchemy.org/en/20/orm/session_transaction.html)
 and [PostgreSQL row locks](https://www.postgresql.org/docs/18/explicit-locking.html).
+
+Set `ADFLOW_RETRIEVAL_INDEX_PATH` to a prepared immutable snapshot directory to load it
+at application startup. Leave it unset/empty for exact current-inventory fallback. In
+Compose, use a path under `/artifacts`, where the existing artifact volume is mounted.
+For example, after the offline build commands above, set it to `/artifacts/flat` and
+recreate the backend. No index is built during startup or requests. Flat is the initial
+default; loading an HNSW artifact is an explicit comparison, not a measured promotion.
+Missing, corrupt or incompatible startup artifacts keep serving through visibly marked
+fallback. A stale dataset/catalog likewise falls back on each request until rebuilt.
+Each process owns `app.state.snapshots`, an `ActiveSnapshot`; controlled in-process
+reload uses its validated `reload(path)` interface. There is no HTTP reload endpoint
+or automatic filesystem watcher. A failed reload retains the old reference but marks
+retrieval degraded; a successful reload clears that failure. Each worker must load its
+own replacement. Direct service callers can pass `snapshots`, `candidate_limit` and
+`search_limit`; omitted snapshots use exact fallback. No CTR model is required.
+
+Focused serving checks from `backend/` with the isolated test database configured:
+
+```powershell
+uv run --locked pytest tests/integration/test_retrieval_serving.py tests/integration/test_recommendations.py
+```
 
 With the isolated test database configured, focused verification from `backend/`:
 
@@ -854,8 +882,12 @@ ad payloads, database exception text and credentials are excluded. Fixed stage h
 measure `selection_ms`, `recommendation_ms`, `event_ms` or `database_probe_ms` where run;
 replays skip selection. Workflow timers include commit time. Request duration ends when
 response headers are prepared; it is not client-observed network latency. Timings are
-bounded request-local data, with no metric history or telemetry platform. The selection
-scan's existing complexity is unchanged.
+bounded request-local data, with no metric history or telemetry platform. New decisions
+also report `retrieval_ms` (including `vector_ms`, `metadata_ms`, `fallback_ms`),
+`ranking_ms`, and `database_ms` for lifecycle key/profile/winner queries, flushes and
+commit, excluding retrieval's database work (already included in metadata/fallback).
+Retry work accumulates in request timings; saved retrieval timings describe the final
+selection attempt. These nested timers must not all be added together as disjoint costs.
 
 Focused checks from `backend/`:
 

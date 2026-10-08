@@ -16,6 +16,7 @@ from app.core.config import Settings
 from app.core.errors import WorkflowError
 from app.core.observability import JsonFormatter, logger
 from app.main import create_app
+from app.retrieval.snapshots import ActiveSnapshot
 from app.schemas.lifecycle import EventResponse, RecommendationResponse
 from app.services.events import EventResult, EventType
 from app.services.recommendations import AdSelection, RecommendationResult
@@ -104,7 +105,14 @@ def test_recommendation_schema_and_empty_no_ad(
     result = RecommendationResult(1, datetime.now(timezone.utc), uuid4(), selection)
 
     def recommend(
-        session: Session, user_id: int, request_key: str, *, clock: Callable[[], datetime]
+        session: Session,
+        user_id: int,
+        request_key: str,
+        *,
+        clock: Callable[[], datetime],
+        snapshots: ActiveSnapshot,
+        candidate_limit: int,
+        search_limit: int,
     ) -> RecommendationResult:
         assert user_id == 1 and request_key == "key"
         return result
@@ -156,7 +164,14 @@ def test_event_response(
 @pytest.mark.parametrize("status", [404, 409, 410, 422, 503])
 def test_workflow_errors(client: TestClient, monkeypatch: pytest.MonkeyPatch, status: int) -> None:
     def fail(
-        session: Session, user_id: int, request_key: str, *, clock: Callable[[], datetime]
+        session: Session,
+        user_id: int,
+        request_key: str,
+        *,
+        clock: Callable[[], datetime],
+        snapshots: ActiveSnapshot,
+        candidate_limit: int,
+        search_limit: int,
     ) -> RecommendationResult:
         raise WorkflowError(status, "safe_reason", "Safe message")
 
@@ -187,7 +202,14 @@ def test_safe_failures_and_request_logging(
             records.append(JsonFormatter().format(record))
 
     def fail(
-        session: Session, user_id: int, request_key: str, *, clock: Callable[[], datetime]
+        session: Session,
+        user_id: int,
+        request_key: str,
+        *,
+        clock: Callable[[], datetime],
+        snapshots: ActiveSnapshot,
+        candidate_limit: int,
+        search_limit: int,
     ) -> RecommendationResult:
         if database_failure:
             raise OperationalError("secret SQL", {}, Exception("password=secret"))

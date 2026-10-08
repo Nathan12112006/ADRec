@@ -38,6 +38,12 @@ class Settings(BaseSettings):
         default=DEFAULT_CANDIDATE_LIMIT, ge=1, le=MAX_CANDIDATE_LIMIT
     )
     retrieval_search_limit: int = Field(default=4000, ge=1, le=MAX_SEARCH_LIMIT)
+    retrieval_index_path: Path | None = None
+
+    @field_validator("retrieval_index_path", mode="before")
+    @classmethod
+    def empty_index_path(cls, value: str | Path | None) -> str | Path | None:
+        return None if value == "" else value
 
     @model_validator(mode="after")
     def validate_retrieval_limits(self) -> Settings:

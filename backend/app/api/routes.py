@@ -9,7 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_clock, get_database, get_session
+from app.api.dependencies import get_clock, get_database, get_session, get_settings
 from app.core.errors import WorkflowError
 from app.core.observability import stage
 from app.db.session import Database
@@ -48,7 +48,16 @@ def recommendations(
     if len(request.headers.getlist("idempotency-key")) != 1:
         raise WorkflowError(422, "invalid_request_key", "Provide exactly one Idempotency-Key")
     with stage("recommendation_ms"):
-        result = recommend(session, body.user_id, idempotency_key, clock=clock)
+        settings = get_settings(request)
+        result = recommend(
+            session,
+            body.user_id,
+            idempotency_key,
+            clock=clock,
+            snapshots=request.app.state.snapshots,
+            candidate_limit=settings.retrieval_candidate_limit,
+            search_limit=settings.retrieval_search_limit,
+        )
     if result.recommendation_id is None:
         request.state.context["outcome"] = "no_ad"
         return Response(status_code=204)

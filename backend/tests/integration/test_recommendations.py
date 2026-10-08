@@ -264,7 +264,7 @@ def test_durable_write_failure_rolls_back_selection_and_key_then_retry_succeeds(
         assert recommend(session, inventory.user_id, key, clock=lambda: NOW).selection is not None
 
 
-@pytest.mark.parametrize("change", ["bid", "ad_active", "advertiser_active"])
+@pytest.mark.parametrize("change", ["bid", "interests", "ad_active", "advertiser_active"])
 def test_inventory_edit_during_selection_is_revalidated_before_persistence(
     database: Database, inventory: Inventory, change: str
 ) -> None:
@@ -299,7 +299,13 @@ def test_inventory_edit_during_selection_is_revalidated_before_persistence(
                     .values(active=False)
                 )
             else:
-                values = {"bid": Decimal("0")} if change == "bid" else {"active": False}
+                values = (
+                    {"bid": Decimal("0")}
+                    if change == "bid"
+                    else {"interests": ["music"]}
+                    if change == "interests"
+                    else {"active": False}
+                )
                 editor.execute(update(Ad).where(Ad.id == inventory.ad_id).values(**values))
             pending = workers.submit(request)
             deadline = time.monotonic() + 2

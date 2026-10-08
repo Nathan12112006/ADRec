@@ -303,7 +303,11 @@ def test_separate_recommendations_of_same_ad_each_credit_their_own_first_click(
         second = recommend(session, opportunity.user_id, str(uuid4()), clock=lambda: NOW)
         assert second.recommendation_id is not None
         assert second.recommendation_id != opportunity.recommendation_id
-        assert second.selection == opportunity.selection
+        assert second.selection is not None and opportunity.selection is not None
+        # Independent opportunities retain independent retrieval measurements.
+        assert second.selection.model_dump(
+            exclude={"retrieval"}
+        ) == opportunity.selection.model_dump(exclude={"retrieval"})
         for recommendation_id in [opportunity.recommendation_id, second.recommendation_id]:
             record_event(session, recommendation_id, "impression", clock=lambda: NOW)
             record_event(session, recommendation_id, "click", clock=lambda: NOW)

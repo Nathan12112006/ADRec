@@ -18,6 +18,7 @@ from app.core.config import Settings, load_settings
 from app.core.errors import WorkflowError
 from app.core.observability import configure_logging, logger, stages
 from app.db.session import Database
+from app.retrieval.snapshots import ActiveSnapshot, SnapshotLoadError
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -29,12 +30,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         database = Database(config)
         app.state.database = database
         try:
+            if config.retrieval_index_path is not None:
+                try:
+                    app.state.snapshots.reload(config.retrieval_index_path)
+                except SnapshotLoadError:
+                    # The retriever exposes the failure and uses current exact inventory.
+                    pass
             yield
         finally:
             database.dispose()
 
     app = FastAPI(title="AdFlow", version="0.1.0", lifespan=lifespan)
     app.state.settings = config
+    app.state.snapshots = ActiveSnapshot()
 
     def error_response(request: Request, status: int, code: str, message: str) -> JSONResponse:
         request.state.context["error_code"] = code
