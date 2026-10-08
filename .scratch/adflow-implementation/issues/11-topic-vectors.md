@@ -115,3 +115,35 @@ git diff --check
 #### Limits and handoff
 
 Vector construction/validation takes O(D + I) time/space for D=13 dimensions and I input interests; inner product takes O(D). Result validation takes O(K log K) time/O(K) space for K<=500 plus candidate topic validation. These are algorithm explanations, not performance results. Serving still uses the Phase 1 overlap selector, which neither normalizes nor adds category membership. This ticket supplies the empty-interest path and fallback result contract, while ticket 13 implements current-inventory bid fallback/filtering/backfill. Ticket 12 owns FAISS/NumPy installation and immutable index artifacts; no search index, fallback adapter, model, new serving path or performance claim is implemented here. Phase 2 is not complete; ticket 12 is next, and ticket 17 remains its technical gate. No human learning checkpoint is certified by this work.
+
+### Review and completion
+
+Committed implementation as `aa435f0` on the existing `main` branch. Final test-database
+Alembic check found no new upgrade operations. Post-suite demo counts stayed
+`100|20|1000|0|0`, confirming isolated test execution preserved the seeded application
+database. Both containers were healthy before successful `down`; containers/network
+were removed, while `adflow-ticket11_postgres_data` and its history were retained.
+
+The code-review skill used independent read-only Standards and Spec sub-agents over
+`git diff f0c7084a0b844de6782074b7dd88a7c1a8b2b025...HEAD`, with task-start HEAD as the
+fixed baseline. Reviewers inspected the recorded results without rerunning checks.
+
+#### Standards
+
+No documented-standard breaches or actionable baseline smells found. Domain language,
+execution evidence, shared vocabulary, cohesive validation and local/Compose
+configuration follow repository rules. The required retrieval protocol stays limited
+to its documented interface. **0 findings**.
+
+#### Spec
+
+No missing/partial requirements, scope creep or wrong implementation found. Binary
+membership, category union, normalization/validation, empty-user path, metadata,
+ordering, diagnostics and bounded limits satisfy ticket 11. FAISS and concrete
+current-inventory fallback remain in tickets 12/13; Phase 1 serving remains unchanged.
+**0 findings**.
+
+Review total: Standards 0, Spec 0; neither axis has an outstanding issue. No fixes or
+additional test runs were needed after review. The follow-up commit records review
+and cleanup evidence only. `git diff --check` passed; the working tree was clean after
+committing. Ticket 11 is done; ticket 12 remains open and is now unblocked.
