@@ -1,0 +1,43 @@
+name: adflow
+
+services:
+  postgres:
+    image: postgres:18.6-bookworm@sha256:afc7e2d441324c0388fa80c3d24f733b4194a4eb7f47dd8ee2b08eb1a24a647c
+    environment:
+      POSTGRES_USER: adflow
+      POSTGRES_PASSWORD: adflow
+      POSTGRES_DB: adflow
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adflow -d adflow"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+      start_period: 10s
+
+  backend:
+    image: adflow-backend:phase1
+    build:
+      context: ./backend
+    environment:
+      # Container DNS differs from the host URLs in .env.example.
+      ADFLOW_DATABASE_URL: postgresql+psycopg://adflow:adflow@postgres:5432/adflow
+      ADFLOW_TEST_DATABASE_URL: postgresql+psycopg://adflow:adflow@postgres:5432/adflow_test
+      ADFLOW_LOG_LEVEL: ${ADFLOW_LOG_LEVEL:-INFO}
+      ADFLOW_DB_CONNECT_TIMEOUT_SECONDS: ${ADFLOW_DB_CONNECT_TIMEOUT_SECONDS:-5}
+      ADFLOW_DB_POOL_TIMEOUT_SECONDS: ${ADFLOW_DB_POOL_TIMEOUT_SECONDS:-5}
+      ADFLOW_DB_STATEMENT_TIMEOUT_SECONDS: ${ADFLOW_DB_STATEMENT_TIMEOUT_SECONDS:-5}
+      ADFLOW_DB_LOCK_TIMEOUT_SECONDS: ${ADFLOW_DB_LOCK_TIMEOUT_SECONDS:-3}
+      ADFLOW_DB_POOL_SIZE: ${ADFLOW_DB_POOL_SIZE:-5}
+      ADFLOW_DB_MAX_OVERFLOW: ${ADFLOW_DB_MAX_OVERFLOW:-5}
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

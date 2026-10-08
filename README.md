@@ -3,12 +3,104 @@
 A personalized advertising recommendation demo using synthetic data. The backend provides
 reproducible entity seeding, durable recommendation replay, client-confirmed impressions,
 attributed clicks and simulated revenue through a synchronous PostgreSQL-backed API.
-Health checks and structured request logging are available. Docker packaging is ticket 09.
+Health checks, structured request logging and a backend/PostgreSQL Docker demo are available.
+
+## Docker demo
+
+Start Docker Desktop with Linux containers and Docker Compose. From the repository root,
+prepare a fresh demo explicitly, then start it normally:
+
+```powershell
+docker compose config --quiet
+docker compose build backend
+docker compose up -d --wait postgres
+docker compose run --rm backend python -m alembic upgrade head
+docker compose run --rm backend python -m app.seeding.cli
+docker compose up -d --wait
+docker compose ps
+```
+
+Open [Swagger UI](http://127.0.0.1:8000/docs),
+[liveness](http://127.0.0.1:8000/health/live) or
+[readiness](http://127.0.0.1:8000/health/ready), then follow the HTTP walkthrough below.
+Preparation creates only the small default entity dataset. Migration and seeding are
+separate from ordinary `docker compose up -d --wait`; neither runs on API startup.
+No historical labels, model training, index builds or later services are included.
+Readiness tests database reachability; it does not certify migration/seed preparation.
+
+The backend image uses digest-pinned Python 3.12.15 and uv 0.12.23, installs runtime wheels
+from `uv.lock` with `--locked --no-dev --no-install-project`, and runs source from `/app`.
+This avoids resolving a separate build backend. The image contains no uv, test tools,
+local virtual environment or dotenv secrets. Run the seed as `python -m app.seeding.cli`
+inside the image; local installation also provides the `adflow-seed` entry point.
+The API runs as UID/GID 10001 and has a readiness health check. PostgreSQL is health-checked
+before dependent containers start. Mechanisms follow official
+[uv Docker guidance](https://docs.astral.sh/uv/guides/integration/docker/) and
+[Compose startup ordering](https://docs.docker.com/compose/how-tos/startup-order/).
+
+Compose publishes only loopback ports 8000 (API) and 5432 (PostgreSQL), with disposable
+`adflow`/`adflow` credentials and application database `adflow`. Container database URLs use
+the `postgres` service hostname. The local `.env.example` URLs use `127.0.0.1`; Compose
+overrides these two URLs and reads log/pool/timeout values from the host environment or
+root `.env`. Create `.env` from the example once for the local backend; Compose defaults
+need no dotenv file. Change port mappings and matching host URLs together if occupied.
+These settings are for the local demo, with no public hosting setup.
+Use explicit IPv4 host URLs to match the published bind address: on this Windows host,
+`localhost` first tried IPv6 and added a measured five-second fallback per new connection.
+
+The project-scoped named volume `postgres_data` retains entities and lifecycle history.
+PostgreSQL 18 mounts it at `/var/lib/postgresql` with versioned PGDATA, following the
+[official PostgreSQL image](https://hub.docker.com/_/postgres). Ordinary stop/start and
+`docker compose down` retain that volume. Repeated identical seeds are no-ops; different
+manifests refuse replacement. Manifests include the Python version, so switching local/
+container runtimes can change dataset identity: skip reseeding a prepared database or
+use a new isolated project/database. There is no startup replacement or cleanup.
+
+```powershell
+docker compose logs --tail 50 backend
+docker compose down
+# Resume the same prepared database later:
+docker compose up -d --wait
+```
+
+For a separate fresh demonstration, use a new Compose project name consistently with
+every command (`docker compose -p adflow-new ...`), after stopping any project using the
+same host ports. This creates a separate volume; it does not replace earlier history.
+Do not add `--volumes` to normal shutdown commands. Image updates are explicit changes
+to pinned image identities followed by rebuild and verification.
+
+## Isolated tests with Compose PostgreSQL
+
+Start PostgreSQL as above. Create the test database once, explicitly; it is never created
+by API startup. From the repository root:
+
+```powershell
+docker compose exec -T postgres createdb -U adflow adflow_test
+docker compose run --rm backend python -m alembic -x database=test upgrade head
+```
+
+If `createdb` reports that the database already exists, keep it and run migrations; do
+not reset it. Install the local development dependencies below and use `.env.example`
+host URLs. Run from `backend/` in PowerShell:
+
+```powershell
+$env:ADFLOW_RUN_POSTGRES_TESTS = '1'
+uv run --locked pytest
+Remove-Item Env:ADFLOW_RUN_POSTGRES_TESTS
+uv run --locked mypy
+uv run --locked ruff check .
+uv run --locked ruff format --check .
+```
+
+Integration fixtures append unique test datasets and run serially against `adflow_test`.
+They never reset the application database. The runtime image intentionally excludes
+development dependencies; run the full suite locally against containerized PostgreSQL.
 
 ## Install and run locally
 
-Verified on Windows with CPython 3.10.11 and uv 0.12.23. The package declares Python
-3.10–3.14; other runtimes/platforms have not yet been exercised. Run from the repository root
+The local development environment uses Windows CPython 3.10.11 and uv 0.12.23; the Docker
+runtime uses Linux CPython 3.12.15. The package declares Python 3.10–3.14; remaining
+runtimes/platforms have not been exercised. Run from the repository root
 in PowerShell (the `uv` commands also work in other shells):
 
 ```powershell
@@ -17,7 +109,10 @@ Copy-Item .env.example .env
 Set-Location backend
 uv sync --locked
 uv run --locked python -c "from app.main import create_app; create_app(); print('configuration valid')"
-uv run --locked uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000 --reload
+# Explicit preparation for a fresh local database; skip seed if already prepared in Docker:
+uv run --locked alembic upgrade head
+uv run --locked adflow-seed
+uv run --locked uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000
 ```
 
 Open [Swagger UI](http://127.0.0.1:8000/docs) or
@@ -26,6 +121,10 @@ Open [Swagger UI](http://127.0.0.1:8000/docs) or
 Startup creates a lazy connection pool, without connecting or creating tables. Shutdown
 disposes the pool. Stop the server with Ctrl+C. Set up the database explicitly below before
 using the recommendation and event endpoints.
+If Docker already prepared the database, skip the seed command and reuse its entities.
+Stop the Compose backend (`docker compose stop backend` from the root) before starting
+local Uvicorn on port 8000; leave Compose PostgreSQL running. Restore the container API
+later with `docker compose up -d --wait backend`.
 
 `uv.lock` pins runtime, development, and build dependencies. Hatchling is included in the
 development group so `uv build --no-build-isolation` uses the locked environment instead
@@ -97,23 +196,22 @@ uv run --locked pytest
 Remove-Item Env:ADFLOW_RUN_POSTGRES_TESTS
 ```
 
-This includes all unit and PostgreSQL tests. PostgreSQL 18.6 was verified locally using
-official [EDB portable binaries](https://www.enterprisedb.com/download-postgresql-binaries)
-after Docker Desktop failed to start. Docker packaging/startup is not yet verified.
+This includes all unit and PostgreSQL tests. PostgreSQL 18.6 is used by the Compose demo
+and the earlier native Windows checks. Native checks used official
+[EDB portable binaries](https://www.enterprisedb.com/download-postgresql-binaries).
 
 ## PostgreSQL setup and migrations
 
 Use a PostgreSQL server you control with separate development and test databases. The
-example `.env` targets port 5432. With Docker Desktop running, this optional local server
-setup matches those credentials (run from the repository root):
+example `.env` targets port 5432. To use only the Compose database with local Uvicorn,
+run from the repository root:
 
 ```powershell
-docker run --detach --name adflow-postgres --publish 127.0.0.1:5432:5432 --env POSTGRES_USER=adflow --env POSTGRES_PASSWORD=adflow --env POSTGRES_DB=adflow postgres:18
-docker exec adflow-postgres pg_isready -U adflow -d adflow
-docker exec adflow-postgres createdb -U adflow adflow_test
+docker compose up -d --wait postgres
+docker compose exec -T postgres createdb -U adflow adflow_test
 ```
 
-Wait until `pg_isready` succeeds before creating the test database. With a native server,
+`--wait` checks PostgreSQL health before continuing. With a native server,
 create both databases with `createdb -h localhost -U adflow adflow` and
 `createdb -h localhost -U adflow adflow_test`, using the configured account and password.
 Creating databases is explicit; the app and migrations never create a database.
@@ -359,12 +457,12 @@ boundary without clearing existing history. Run integration checks serially.
 
 ## HTTP lifecycle and health
 
-With migrations applied and the default seed generated, start Uvicorn as above. Run from
-`backend/` in another PowerShell terminal. The first command reproduces a user ID for the
-default seed; if you changed seed/counts, pass those same values to `SeedConfig`:
+With migrations and seed preparation complete, use either the Compose API or local
+Uvicorn. Run from the repository root in another PowerShell terminal. Query an actual
+seeded user from the active database, so its ID works regardless of the seed runtime:
 
 ```powershell
-$userId = [long](uv run --locked python -c "from app.seeding import SeedConfig, generate_entities; print(next(row['id'] for kind, row in generate_entities(SeedConfig()) if kind == 'users'))")
+$userId = [long](docker compose exec -T postgres psql -U adflow -d adflow -Atc 'SELECT id FROM users ORDER BY id LIMIT 1')
 $api = 'http://127.0.0.1:8000'
 $headers = @{ 'Idempotency-Key' = [guid]::NewGuid().ToString() }
 $body = @{ user_id = $userId } | ConvertTo-Json
@@ -377,6 +475,18 @@ Invoke-RestMethod -Method Post -Uri "$api/api/v1/events/click" -ContentType 'app
 Invoke-RestMethod -Uri "$api/health/live"
 Invoke-RestMethod -Uri "$api/health/ready"
 ```
+
+For native PostgreSQL, replace the first command with the equivalent `psql` query using
+your configured host/account/database. The walkthrough creates one recommendation, one
+impression and one click. Inspect counts and captured-bid credit from the repository root:
+
+```powershell
+$id = $recommendation.recommendation_id
+docker compose exec -T postgres psql -U adflow -d adflow -c "SELECT event_type, count(*), sum(simulated_revenue) FROM events WHERE recommendation_id = '$id' GROUP BY event_type ORDER BY event_type"
+```
+
+Both counts must be one; the click total must equal `selection.bid`, and impression
+revenue must be zero. Retries return the same recommendation/event without extra credit.
 
 The recommendation response contains `recommendation_id`, `user_id`, `created_at`, and
 `selection` (the saved ad payload, decimal bid, overlap score and strategy identity).
@@ -510,6 +620,8 @@ application-only deduplication; no throughput claim is made.
 | `backend/tests/unit/test_seed_generation.py` and `test_seed_cli.py` | Reproducibility, stream independence, validation and CLI checks |
 | `backend/pyproject.toml` | Package, dependency ranges, pytest, Ruff, strict mypy configuration |
 | `backend/uv.lock` | Reproducible resolved dependency versions |
+| `backend/Dockerfile` and `backend/.dockerignore` | Locked runtime image, non-root API startup, health check and filtered build context |
+| `docker-compose.yml` | Local backend/PostgreSQL services, loopback ports, persistent volume and dependency health ordering |
 
 The approved layout adds remaining subsystems when their
 implementation tickets begin. Empty subsystem
