@@ -1,12 +1,12 @@
 # 16 — Measure exact and approximate retrieval quality and cost
 
 Status: ready-for-agent
-State: open
+State: active
 Type: task
 Kind: implementation
 Phase: 2 — Candidate retrieval
 Parent: [AdFlow implementation backlog](../spec.md)
-Assignee: unassigned
+Assignee: Codex
 Blocked by: 03, 10, 14, 15
 
 ## Scope

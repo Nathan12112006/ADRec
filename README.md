@@ -664,6 +664,88 @@ errors (`0xc0000008`). Fresh-process import/persistence probes and repeated focu
 outside that sandbox passed; native verification used the reviewed outside-sandbox path.
 No dependency change or application workaround is attributed to a proven root cause.
 
+## Reproducible retrieval component comparisons
+
+`app.retrieval.benchmark.run_comparison(database, dataset_id, output, config)` and
+`adflow-retrieval-benchmark` compare full-ad ranking, Flat plus ranking, and HNSW plus
+the same `interest-overlap/baseline-v1` ranking. These are serial offline components,
+with no HTTP calls, recommendation inserts, event writes, cache or CTR model. Their
+component totals are not API latency, opportunities per second, or capacity evidence.
+Full-ad ranking is a benchmark path, not a public recommendation query option.
+
+Prepare migrations and synthetic entities explicitly in a separate test/benchmark
+database. From `backend/`, after setting distinct application/test URLs:
+
+```powershell
+uv run --locked alembic -x database=test upgrade head
+uv run --locked python -m app.seeding.cli --database test --seed 160016 --users 1000 --advertisers 200 --ads 100000 --append
+# Use the dataset_id printed by the seed command. Choose a NEW output directory.
+uv run --locked python -m app.retrieval.benchmark_cli --database test --dataset-id $datasetId --output ../artifacts/retrieval-comparison --queries 30 --empty-queries 3 --warmup-queries 10 --repetitions 3 --limit 500 --threads 1
+```
+
+The default query count is 100; the command above declares a shorter 30-query component
+comparison. Query sampling is seeded and without replacement from available nonempty
+profiles; reports record requested and actual counts. Empty-interest clones are explicit,
+separate queries, never included in personalized recall/P95 or nominal ANN samples.
+`--query-seed`, `--boundary-tolerance`, `--hnsw-m`, `--ef-construction`, `--ef-search`,
+warmup and repetition controls are saved in the report. One FAISS thread and one serial
+caller are the defaults. The runner restores its previous FAISS thread setting afterward.
+Run it in its own process, rather than concurrently inside an API worker.
+
+One repeatable-read PostgreSQL transaction freezes catalog eligibility, metadata and
+profiles. A shared catalog revision lock also prevents catalog editors committing during
+the comparison. This offline transaction disables its local idle timeout for index
+preparation; serving timeouts are unchanged. Prefer the isolated benchmark database;
+the CLI never seeds, migrates, resets, or deletes data. The optional application database
+mode also holds this lock and is for deliberate offline comparisons.
+
+Each new output directory retains `queries.json`, a compressed `catalog.jsonl.gz` export
+with actual metadata/eligibility, complete immutable `flat/` and `hnsw/` artifacts,
+`report.json` with raw per-query/repetition samples and summaries, and `status.json`.
+An existing directory is refused. Failures/interruption leave a failed status and do
+not claim a completed comparison. Inputs have checksums; code revision/source hashes,
+dataset manifest/counts, query seed, catalog identity, runtime/hardware/database location,
+index manifests/settings, build/reload/artifact sizes, process memory and CPU observations
+are retained. No credentials are exported.
+
+Build timings include native construction, serialization and artifact validation, outside
+query timing. Process working-set/RSS observations and cumulative peaks include catalog,
+reference scores, indexes and harness allocations; they are not isolated index memory
+costs. Serialized index/artifact bytes are reported separately. Memory sampling is outside
+component timings. CPU time includes measurement-loop quality evaluation/harness overhead.
+The report distinguishes vector, metadata/filtering, exact fallback, ranking and component
+total timings, plus modes, candidate counts, winners, bids, score differences and fallback
+rates. Full-ad measurement materializes the baseline's required ID/interests/bid fields to
+separate metadata and ranking timing, using O(N) harness memory; it is not the old streaming
+selector's O(1) selection-memory implementation. Indexed paths use their actual metadata
+retriever and rank at most C candidates. Totals include adapter work between stages.
+
+Warmup samples and independent exact-score quality preparation are excluded from reported
+latencies. Measured paths are deterministically interleaved for each query. Percentiles
+use nearest rank on raw samples; per-repetition values are retained and never averaged
+into a pooled P95. Repetitions reuse the same frozen inputs/artifacts/process, with no
+database/cache reset. These short component repetitions do not replace Phase 8's
+60-second warmup, three-minute HTTP runs or independent load-test repetitions.
+
+Ordinary ID recall uses the exact Flat returned set and remains sensitive to boundary
+ties. Canonical tie-aware recall uses all frozen eligible exact scores, with declared
+absolute tolerance (default `1e-6`) around the kth score. It credits interchangeable
+boundary members while separately counting missed strictly superior ads. For k=0, recall
+is unavailable, not perfect. Reports retain query-level quality variation and differences
+from the full-ad ranking winner; similarity recall does not guarantee preserving it.
+
+HNSW eligibility requires lower full-retrieval P95 than Flat, every measured query's
+tie-aware recall at least 95%, three repetitions and no personalized fallback. This is
+a conservative quality gate. The runner never changes serving settings. If it fails,
+retain Flat. Saved ticket-16 measurements and limitations are recorded in the
+[comparison evidence](.scratch/adflow-implementation/evidence/ticket16/results.md).
+
+Focused verification with the isolated PostgreSQL test database enabled:
+
+```powershell
+uv run --locked pytest tests/unit/test_retrieval_evaluation.py tests/unit/test_retrieval_benchmark_cli.py tests/integration/test_retrieval_benchmark.py
+```
+
 ## Recommendation workflow
 
 `app.services.recommendations.recommend(session, user_id, request_key)` implements
