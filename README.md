@@ -301,6 +301,62 @@ concurrent requests and inventory edits, and create temporary test-only triggers
 reject inserts or commits; those triggers are removed in `finally` blocks. No database
 reset or durable-history deletion occurs. Run integration checks serially.
 
+## Impression and click workflow
+
+`app.services.events.record_event(session, recommendation_id, event_type)` accepts
+`"impression"` or `"click"` and returns an immutable `EventResult` after commit. As with
+recommendations, supply a fresh session from `database.session()`; the service owns the
+transaction. The result contains recommendation ID, event type, server receipt time,
+stored user/ad attribution and decimal simulated revenue. Clients provide no user/ad,
+bid or revenue claims. HTTP endpoint/UUID validation and response mapping are ticket 07.
+
+Only explicit display confirmation records an impression. A first click needs a
+committed impression; otherwise `WorkflowError` reports 409 with `impression_required`,
+allowing confirmation followed by retry. A first event is accepted strictly before the
+recommendation's creation time plus 24 hours; exactly at that boundary and later return
+410. Unknown recommendation IDs return 404. An accepted duplicate is checked before
+expiration and returns the original event, including timestamp/revenue, even after the
+window closes. Database read/write/commit or pool/lock failures return a safe 503.
+
+Each impression stores zero revenue. Each first accepted click stores the recommendation's
+captured bid in its event row, so event acceptance and simulated revenue are one atomic
+insert. Zero bids still accept clicks with zero credit. Later bid edits or ad/advertiser
+deactivation affect neither attribution nor eligibility of this saved recommendation.
+Separate recommendations of the same ad can each receive their own impression and click.
+Summing accepted click rows provides simulated revenue without a second mutable counter.
+
+The `(recommendation_id, event_type)` primary key is the concurrency authority. After
+prechecks, `INSERT ... ON CONFLICT (recommendation_id, event_type) DO NOTHING` suppresses
+only a duplicate of that event identity. A racing insert waits for the other transaction,
+then reads the committed winner under PostgreSQL's default READ COMMITTED isolation.
+No existing event is updated and no additional credit is applied. An impression still
+in flight may cause a simultaneous click to return 409; retry the click after confirmation
+commits. A response lost after commit is safe to retry. Required failures never report
+an unsaved acceptance. This follows
+[SQLAlchemy PostgreSQL conflict handling](https://docs.sqlalchemy.org/en/20/dialects/postgresql.html#insert-on-conflict-upsert)
+and [PostgreSQL INSERT](https://www.postgresql.org/docs/18/sql-insert.html).
+
+`app.core.clock.utc_now` supplies server UTC time to both workflows. The event service
+captures receipt time once before database work; its optional callable `clock` supports
+controlled tests and is not a client timestamp field. Event processing uses a constant
+number of indexed recommendation/event lookups and at most one inserted event, with
+O(1) application working space. Index maintenance and contended insert waits add cost;
+configured timeouts bound database waits, not an end-to-end request deadline. Durable
+event history grows with accepted interactions; no pruning or throughput claim is added.
+
+Focused checks from `backend/`, with the dedicated PostgreSQL test URL configured:
+
+```powershell
+$env:ADFLOW_RUN_POSTGRES_TESTS = "1"
+uv run --locked pytest tests/integration/test_events.py
+Remove-Item Env:ADFLOW_RUN_POSTGRES_TESTS
+```
+
+Tests create unique synthetic datasets/opportunities, coordinate concurrent duplicates,
+and install fixture-specific insert/commit failure triggers removed in `finally` blocks.
+They verify event counts and decimal revenue directly at the PostgreSQL persistence
+boundary without clearing existing history. Run integration checks serially.
+
 ## Persistence contract
 
 `datasets` records identity, seed, generator version and JSON configuration. Users,
@@ -352,6 +408,7 @@ application-only deduplication; no throughput claim is made.
 | `backend/app/seeding/` | Versioned entity generator, atomic append/no-op persistence, seed CLI |
 | `backend/app/ranking/` and `backend/app/db/selection.py` | Pure deterministic baseline and streamed eligible-inventory reader |
 | `backend/app/services/recommendations.py` and `backend/app/core/errors.py` | Atomic recommendation/no-ad opportunities, durable replay and safe workflow failures |
+| `backend/app/services/events.py` and `backend/app/core/clock.py` | Idempotent client events, captured-bid credit and shared server UTC clock |
 | `backend/tests/unit/test_seed_generation.py` and `test_seed_cli.py` | Reproducibility, stream independence, validation and CLI checks |
 | `backend/pyproject.toml` | Package, dependency ranges, pytest, Ruff, strict mypy configuration |
 | `backend/uv.lock` | Reproducible resolved dependency versions |

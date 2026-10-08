@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Literal
 from uuid import UUID
@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.core.clock import utc_now
 from app.core.errors import WorkflowError
 from app.db.selection import select_baseline_ad
 from app.models.records import Ad, Advertiser, Recommendation, RequestOutcome, User
@@ -42,10 +43,6 @@ class RecommendationResult:
     created_at: datetime
     recommendation_id: UUID | None
     selection: AdSelection | None
-
-
-def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
 
 
 class _InventoryChanged(Exception):
