@@ -14,3 +14,4 @@ dist/
 .coverage
 htmlcov/
 .uv-cache/
+.local-postgres/

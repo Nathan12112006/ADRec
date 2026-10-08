@@ -12,6 +12,8 @@ dependencies = [
   "pydantic>=2.10,<3",
   "pydantic-settings>=2.7,<3",
   "sqlalchemy>=2.0,<2.1",
+  "alembic>=1.14,<2",
+  "psycopg[binary]>=3.2,<4",
   "uvicorn>=0.34,<1",
 ]
 
@@ -42,4 +44,4 @@ select = ["E", "F", "I", "UP", "B"]
 python_version = "3.10"
 strict = true
 plugins = ["pydantic.mypy"]
-files = ["app", "tests"]
+files = ["app", "tests", "migrations"]

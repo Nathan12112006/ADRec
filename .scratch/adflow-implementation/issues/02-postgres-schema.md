@@ -1,12 +1,12 @@
 # 02 — Implement PostgreSQL sessions and initial schema migrations
 
 Status: ready-for-agent
-State: open
+State: active
 Type: task
 Kind: implementation
 Phase: 1 — Core backend
 Parent: [AdFlow implementation backlog](../spec.md)
-Assignee: unassigned
+Assignee: Codex
 Blocked by: 01
 
 ## Scope

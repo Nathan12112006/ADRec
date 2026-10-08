@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     db_connect_timeout_seconds: int = Field(default=5, ge=1, le=30)
     db_pool_timeout_seconds: int = Field(default=5, ge=1, le=30)
+    db_statement_timeout_seconds: int = Field(default=5, ge=1, le=30)
+    db_lock_timeout_seconds: int = Field(default=3, ge=1, le=30)
     db_pool_size: int = Field(default=5, ge=1, le=20)
     db_max_overflow: int = Field(default=5, ge=0, le=20)
 
