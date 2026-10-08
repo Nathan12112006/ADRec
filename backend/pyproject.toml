@@ -26,6 +26,9 @@ dev = [
   "mypy>=1.14,<2",
 ]
 
+[project.scripts]
+adflow-seed = "app.seeding.cli:main"
+
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
 

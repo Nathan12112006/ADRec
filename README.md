@@ -2,7 +2,8 @@
 
 A personalized advertising recommendation demo using synthetic data. Ticket 01 supplies
 the backend package and configuration foundation. Ticket 02 adds synchronous PostgreSQL
-sessions and explicit Alembic migrations. Recommendation/event APIs, health checks, seeds,
+sessions and explicit Alembic migrations. Ticket 03 adds reproducible entity seeding.
+Recommendation/event APIs, health checks,
 and Docker packaging arrive in later tickets.
 
 ## Install and run locally
@@ -134,6 +135,70 @@ without connecting. Repeated upgrades at head preserve all data. Revision `0001`
 the schema and revision `0002` protects durable history. Downgrades are intentionally
 unsupported: use a newly named disposable database to repeat a fresh setup.
 
+## Synthetic entity seeds
+
+After `uv sync --locked` and explicit migrations, run from `backend/`:
+
+```powershell
+uv run --locked adflow-seed
+uv run --locked adflow-seed --seed 123 --users 100 --advertisers 20 --ads 1000
+uv run --locked adflow-seed --users 10000 --advertisers 100 --ads 100000
+uv run --locked adflow-seed --database test --seed 123 --users 5 --advertisers 2 --ads 10
+```
+
+Each command is a separate choice of dataset. The default is seed 42 with 100 users,
+20 advertisers and 1,000 ads. No request outcomes, recommendations, impressions or clicks
+are generated. FAISS, ML, Redis and experiments are not required. `python -m app.seeding.cli`
+is an equivalent entry point; `--help` works without database configuration.
+
+Counts must be nonnegative; ads require at least one advertiser. `--batch-size` accepts
+1–10,000 (default 1,000) and changes write buffering, not generated data. The CLI prints
+JSON containing dataset identity, requested counts, status and the complete manifest.
+Exit codes are 0 for success/no-op, 2 for invalid settings or a dataset conflict, and 3
+for database failure (all writes rolled back). It never runs migrations implicitly.
+
+Repeating identical inputs reports `already_exists` and changes nothing, even if inventory
+has subsequently been edited. Counts in that response describe the original seed, not a
+fresh audit or repair. Different inputs refuse to write when a dataset already exists.
+Use a fresh database for replacement, or deliberately add inventory with:
+
+```powershell
+uv run --locked adflow-seed --seed 123 --users 100 --advertisers 20 --ads 1000 --append
+```
+
+Append preserves existing entities and lifecycle history; it also expands the inventory
+available to subsequent serving. No replacement/delete/reset flag exists. A transaction-level
+advisory lock serializes cooperating seeders with the configured lock timeout. One transaction
+contains provenance and every batch, so any failure rolls back the entire seed.
+
+The `entities-v1` generator uses the brief's 13 topics as categories, with documented related
+interests (for example gaming/technology and fitness/sports). Users sample 1–5 unique interests
+uniformly, then 1–3 category preferences from those interests. Age group, country and device
+use uniform choices from the lists stored in the manifest. Advertiser topics, ad categories
+and advertiser associations are uniform. All generated advertisers and ads are active.
+Bids are uniform integer cents from $0.25–$5.00, converted directly to `Decimal`. Empty-interest
+users, zero bids and inactive inventory remain separate edge fixtures. These distributions
+are designed synthetic assumptions, not population estimates or observed click behavior.
+
+Separate SHA-256-derived random streams generate users, advertisers and ads. Changing profile
+counts does not consume the ad stream. The manifest records the seed, counts, generator/Python
+versions, vocabulary, relationships and distributions; historical counts are zero and time
+ranges/splits are null. Generation is reproducible within the recorded Python runtime. Dataset
+creation time records loading time and is not a simulated entity timestamp.
+
+A UUID derived from the complete manifest identifies each dataset. Positive 63-bit entity IDs
+derive from dataset/type/position, so references repeat independently of database sequence state
+and batch size. Changing configuration changes dataset and reference IDs. A rare hash-ID collision
+causes a constraint failure and full rollback, never an overwrite. Bounded batch insertion uses
+O(batch size) working memory and O(users + advertisers + ads) generation work, plus database index
+maintenance. Large seeds keep one transaction open and may need smaller batches on slow hosts;
+this is an explicit development operation, not a request path or automatic startup task.
+
+See [SQLAlchemy bulk inserts](https://docs.sqlalchemy.org/en/20/orm/queryguide/dml.html#orm-bulk-insert-statements),
+[PostgreSQL advisory locks](https://www.postgresql.org/docs/18/functions-admin.html#FUNCTIONS-ADVISORY-LOCKS),
+and [Python random reproducibility](https://docs.python.org/3.10/library/random.html#notes-on-reproducibility)
+for the underlying APIs. Seed tests run with the normal unit/PostgreSQL commands above.
+
 ## Persistence contract
 
 `datasets` records identity, seed, generator version and JSON configuration. Users,
@@ -182,6 +247,8 @@ application-only deduplication; no throughput claim is made.
 | `backend/tests/unit/test_config.py` | Configuration loading, isolation, validation, secret redaction |
 | `backend/tests/unit/test_app.py` | Factory and synchronous dependency behavior through TestClient |
 | `backend/tests/integration/` | Opt-in PostgreSQL constraints, snapshots, rollback, and wait limits |
+| `backend/app/seeding/` | Versioned entity generator, atomic append/no-op persistence, seed CLI |
+| `backend/tests/unit/test_seed_generation.py` and `test_seed_cli.py` | Reproducibility, stream independence, validation and CLI checks |
 | `backend/pyproject.toml` | Package, dependency ranges, pytest, Ruff, strict mypy configuration |
 | `backend/uv.lock` | Reproducible resolved dependency versions |
 
