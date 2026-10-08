@@ -107,3 +107,22 @@ git diff --check
 ### Learning handoff
 
 Ticket 17's technical gate passes and unblocks ticket 18/Phase 3. Offered [ticket 58](58-learning-retrieval.md): explain why faster vector search alone does not prove a better retrieval pipeline, then direct a small candidate-limit/search-depth change and verify candidate count, tie-aware quality and cost. Ticket 58 stays open; no human explanation, change or understanding is claimed complete.
+
+### Review and cleanup
+
+Committed gate evidence as `84a1d6d` on the current `main` branch. Applied code-review with independent parallel Standards and Spec agents over `git diff 7e376aadb3a0ed9d4e431409233b45b2a05dcf85...HEAD`.
+
+Standards: **0 findings**. Tracker/domain conventions and the shared evidence rules are satisfied; no actionable baseline smells. The reviewer independently ran the read-only report auditor, confirming saved hashes/counts/P95/promotion decisions, and inspected smoke outputs. Full suite and Docker execution were not repeated by the reviewer.
+
+Spec: **0 findings**. Canonical checks, actual sizes/modes, retained Flat decision, exact-scan/bounded-ranking explanation, rebuild/fallback guidance and separate human checkpoint satisfy ticket 17. Saved outputs and governing requirements were inspected; test outcomes came from this implementation's recorded execution.
+
+The native PostgreSQL server started for verification was stopped successfully, and the temporary Compose network was removed. Both data volumes (including the empty volumes created by the no-dependency Docker smoke), all databases, indexes and evidence remain retained. No Compose database service was started in this ticket. Cleanup commands from repository root, outside the sandbox:
+
+```powershell
+.local-postgres/pgsql/bin/pg_ctl.exe stop -D .local-postgres/data -w
+docker compose down
+git status --short
+git diff --check
+```
+
+The tree was clean before recording this final review note; whitespace check passed. No further application checks were necessary for this documentation-only note.
