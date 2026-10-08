@@ -75,3 +75,57 @@ Both runtimes verified known fixture cosines 1, approximately 0.70710678, and 0;
 Also exercised actual Docker CLI build with `--index hnsw --hnsw-m 16 --ef-construction 80 --ef-search 64 --threads 1`, then load/query with `--ef-search 32`: snapshot `be9bba8e-4eac-4b67-bc4a-076545bab944`, 1,000 ads, query reports 32 while manifest retains 64. Native installed `adflow-index` load/query with depth 64 likewise retained manifest depth 128. Post-suite application database counts remained `100|20|1000|0|0|1020` (users, advertisers, ads, recommendations, events, revision). Containers were stopped with `docker compose -p adflow-ticket14 down`; data and artifact volumes were retained.
 
 These are correctness smoke timings, not warmed benchmarks, P95, recall, resident-memory measurements, or speed comparisons; build order and runtime caches can affect them. Artifact bytes record observed storage costs. Full ranking/Flat/HNSW controlled comparison, canonical tie-aware recall, 100,000-ad evidence and promotion remain ticket 16; serving integration remains ticket 15. No HNSW promotion, IVF/compression/GPU implementation, phase completion, or human checkpoint completion is claimed.
+
+### Verification commands
+
+Native checks use PowerShell from `backend/`, outside the sandbox for native FAISS and PostgreSQL access, with these environment variables. The final suite includes all focused cases described above.
+
+```powershell
+$env:ADFLOW_DATABASE_URL='postgresql+psycopg://adflow:adflow@127.0.0.1:5432/adflow'
+$env:ADFLOW_TEST_DATABASE_URL='postgresql+psycopg://adflow:adflow@127.0.0.1:5432/adflow_test'
+$env:ADFLOW_RUN_POSTGRES_TESTS='1'
+.\.venv\Scripts\python.exe -m pytest tests/unit/test_hnsw_snapshots.py -q --tb=short
+.\.venv\Scripts\python.exe -m pytest tests/unit/test_hnsw_snapshots.py tests/unit/test_index_cli.py -q --tb=short
+.\.venv\Scripts\python.exe -m pytest tests/integration/test_candidate_retrieval.py -q --tb=short
+.\.venv\Scripts\python.exe -m mypy
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m ruff format --check .
+.\.venv\Scripts\python.exe -m alembic check
+.\.venv\Scripts\python.exe -m alembic -x database=test check
+.\.venv\Scripts\python.exe -m pytest --tb=short
+```
+
+Docker preparation, smoke, and cleanup commands from repository root:
+
+```powershell
+docker ps --format "{{.Names}} {{.Ports}}"
+docker volume ls --filter name=adflow-ticket14
+docker compose -p adflow-ticket14 up -d --wait postgres
+docker compose -p adflow-ticket14 exec -T postgres createdb -U adflow adflow_test
+docker compose -p adflow-ticket14 config --quiet
+docker compose -p adflow-ticket14 build backend
+docker build --check backend
+docker compose -p adflow-ticket14 run --rm backend python -m alembic upgrade head
+docker compose -p adflow-ticket14 run --rm backend python -m app.seeding.cli
+docker compose -p adflow-ticket14 up -d --wait
+Get-Content -Raw .uv-cache/ticket14-smoke.py | docker compose -p adflow-ticket14 exec -T backend python -
+docker compose -p adflow-ticket14 run --rm backend python -m app.retrieval.cli build --dataset-id 07415efc-7c8f-5781-92d1-e922d81fa502 --output /artifacts/ticket14-cli-hnsw --index hnsw --hnsw-m 16 --ef-construction 80 --ef-search 64 --threads 1
+docker compose -p adflow-ticket14 run --rm backend python -m app.retrieval.cli load /artifacts/ticket14-cli-hnsw --interests technology gaming --limit 3 --ef-search 32 --threads 1
+Invoke-RestMethod http://127.0.0.1:8000/health/ready
+docker image inspect adflow-backend:phase1 --format '{{.Id}}'
+docker compose -p adflow-ticket14 exec -T postgres psql -U adflow -d adflow -Atc "SELECT (SELECT count(*) FROM users), (SELECT count(*) FROM advertisers), (SELECT count(*) FROM ads), (SELECT count(*) FROM recommendations), (SELECT count(*) FROM events), (SELECT revision FROM catalog_revisions WHERE dataset_id='07415efc-7c8f-5781-92d1-e922d81fa502');"
+docker compose -p adflow-ticket14 down
+```
+
+Native runtime smoke and installed CLI from repository root, with the same application/test URLs above:
+
+```powershell
+$env:ADFLOW_SMOKE_ROOT='.uv-cache/ticket14-native'
+backend/.venv/Scripts/python.exe .uv-cache/ticket14-smoke.py
+backend/.venv/Scripts/adflow-index.exe load .uv-cache/ticket14-native/hnsw --interests technology gaming --limit 3 --ef-search 64
+git diff --check
+```
+
+### Final review
+
+Implementation commit `57810f0` reviewed by independent parallel Standards and Spec reviewers using `git diff b96c92e15c4e7d28b26d85c2f580bb60b00b8bc1...HEAD`. Spec: **0 findings**. Standards: **1 documentation finding**, requiring exact verification invocations and working directories under the shared evidence rule; the command blocks above address it. No heuristic smells were found. The correction only changes this evidence document; passing implementation checks were not rerun. The Standards reviewer rechecked the correction and confirmed **0 remaining findings**. Final `git diff --check` passed.
