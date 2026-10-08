@@ -33,6 +33,7 @@ dev = [
 adflow-seed = "app.seeding.cli:main"
 adflow-index = "app.retrieval.cli:main"
 adflow-retrieval-benchmark = "app.retrieval.benchmark_cli:main"
+adflow-history = "app.history.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]

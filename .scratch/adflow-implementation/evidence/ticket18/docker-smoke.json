@@ -1,0 +1,16 @@
+{
+  "python": "3.12.15",
+  "system": "Linux",
+  "counts": {
+    "users": 1,
+    "eligible_ads": 1,
+    "impressions": 1000,
+    "clicks": 61
+  },
+  "files": {
+    "users.jsonl": "7448967dcddfd061e4c0fac88ed3f7e421c80b2b6b414a9f8cb2d7ece494477e",
+    "ads.jsonl": "d7e27ff3e9bb66a6209fc50134945929fe22ebddaa555aeb9101e88bd6693bac",
+    "exposures.jsonl": "ba4343308918129ce65560862b7dc2a410c6ce5c47550d7467174bc3be81c4f9"
+  },
+  "identical_repeat": true
+}

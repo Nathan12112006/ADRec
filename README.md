@@ -14,6 +14,8 @@ retrieval with marked fallback and bounded recommendation serving are available.
 passed on 2026-10-08; Flat remains the serving default after HNSW failed promotion.
 CTR modeling,
 experiments, Redis, dashboards and HTTP load tests remain planned work.
+Independent historical exposure artifacts are available for offline model development;
+generation is explicit and never adds live recommendations or events.
 The separate [lifecycle learning checkpoint](.scratch/adflow-implementation/issues/57-learning-lifecycle.md)
 remains open; passing software checks does not certify human understanding.
 
@@ -749,6 +751,84 @@ Focused verification with the isolated PostgreSQL test database enabled:
 uv run --locked pytest tests/unit/test_retrieval_evaluation.py tests/unit/test_retrieval_benchmark_cli.py tests/integration/test_retrieval_benchmark.py
 ```
 
+## Offline historical exposures
+
+`python -m app.history.cli` (installed command `adflow-history`) generates separate
+versioned training artifacts from an existing entity dataset. Default volume is 10,000
+historical exposures; demo startup still generates none. From `backend/`, configure
+distinct application/test URLs, prepare the chosen database explicitly, and use the
+dataset ID printed by the seed:
+
+```powershell
+# Use a separate database for optional full preparation; preserve existing datasets.
+uv run --locked alembic -x database=test upgrade head
+uv run --locked python -m app.seeding.cli --database test --seed 180018 --users 10000 --advertisers 100 --ads 100000
+uv run --locked python -m app.history.cli --database test --dataset-id $datasetId --output ../artifacts/history-demo --impressions 10000 --batch-size 1000 --seed 18
+# Optional full history, in a NEW directory:
+uv run --locked python -m app.history.cli --database test --dataset-id $datasetId --output ../artifacts/history-full --impressions 1000000 --batch-size 1000 --seed 18
+```
+
+`--database application` is an explicit alternative read source. Export uses a read-only
+repeatable-read PostgreSQL transaction and releases it before generation. It freezes
+all source user fields and eligible ad fields, including their advertiser ID/activity.
+Only active ads belonging to active advertisers can be exposed. Missing datasets, users
+or eligible inventory are errors. No recommendation/event/request-outcome tables are
+written, and no serving API, ranking strategy, CTR model or index is called.
+
+Each output directory contains `users.jsonl`, `ads.jsonl`, `exposures.jsonl` and a final
+`manifest.json`. Exposures reference frozen user/ad IDs and contain a local integer
+`impression_id`, UTC `impressed_at`, binary `clicked` and nullable `clicked_at`. The
+identity is `(history_id, impression_id)`; local IDs restart in each history. Positive
+click times follow their impressions, with at most one click per exposure. Clicks are
+additional outcomes of the requested impression count, rather than a mixed event target.
+The manifest retains dataset/entity provenance, versions, complete configuration, file
+SHA-256 hashes, time range, stream derivations, observed synthetic CTR and matched versus
+unmatched rates. Full source snapshots retain bids for provenance; bids are excluded
+from the outcome calculation and future model inputs. Hidden preferences and generating
+probabilities never appear in exposure rows or entity snapshots.
+
+Outcome version `click-world-v1` uses the sigmoid of a logit with default intercept -4.2,
+0.45 per distinct shared interest, 0.8 for category membership in the user's explicit
+category preferences, mobile offset 0.15, tablet offset -0.1 and desktop/unknown offset 0.
+Separate fixed hidden user/ad offsets each come from uniform [-0.15, 0.15]. These are
+designed assumptions, not measured population statistics. The generator samples a
+binary outcome; a relevant ad is never guaranteed a click. Outcome settings can be
+supplied as an `OutcomeConfig` JSON file via `--outcome-config`; all defaults and overrides
+are recorded. Do not change rules after viewing final-test or experiment results to
+force an improvement. Synthetic rates do not establish real-user effectiveness.
+
+Exposure samples users and eligible ads independently and uniformly with replacement,
+after sorting IDs. Exposure, outcome, hidden-preference and click-delay randomness is
+separate from entity-generation streams. Outcome draws derive from seed/version and
+stable opportunity identity, making the public generator suitable for later live
+simulation regardless of completion order. Batch size, bid and click delay do not
+change the exposure or label stream. Same frozen inputs/configuration and supported
+runtime reproduce files/manifest; changed entity snapshots or runtime have distinct
+provenance. Regeneration uses a new output directory: existing outputs are refused.
+On write failure, retained partial files carry `status.json` with `failed` and no
+successful manifest is claimed. Consume only complete manifests with valid hashes.
+
+Default simulated time starts at 2026-01-01 UTC, advances one second per exposure, and
+uses click delays of 1–300 seconds. `--start`, `--interval-seconds` and
+`--max-click-delay-seconds` override these controls. The manifest declares chronological
+70/15/15 boundaries by `(impressed_at, impression_id)`; ticket 19 owns materializing
+those splits and the shared five-feature builder. Labels stay with their impressions.
+IDs, bids, variants, hidden preferences/probabilities and outcomes are not model features.
+No preprocessing, training, final-test evaluation or live-data ingestion occurs here.
+
+For U users, N eligible ads, H exposures and batch bound B, generation takes O(H) work
+for fixed-width contexts plus O(U log U + N log N) source ordering and O(U+N+B) memory.
+The frozen entity catalog stays in memory; history rows do not accumulate. Output disk
+space grows with H. PostgreSQL export is streamed in 1,000-row batches before retaining
+the entity snapshot. This bounds history memory without claiming constant catalog memory
+or a hardware-independent full-generation duration.
+
+Focused verification (isolated PostgreSQL opt-in enabled):
+
+```powershell
+uv run --locked pytest tests/unit/test_history_outcomes.py tests/unit/test_history_artifacts.py tests/unit/test_history_cli.py tests/integration/test_history.py
+```
+
 ## Candidate-retrieval technical gate
 
 [Ticket 17](.scratch/adflow-implementation/issues/17-retrieval-gate.md) records the
@@ -1094,6 +1174,7 @@ application-only deduplication; no throughput claim is made.
 | `backend/tests/unit/test_app.py` | Factory and synchronous dependency behavior through TestClient |
 | `backend/tests/integration/` | Opt-in PostgreSQL constraints, snapshots, rollback, and wait limits |
 | `backend/app/seeding/` | Versioned entity generator, atomic append/no-op persistence, seed CLI |
+| `backend/app/history/` | Independent outcomes, read-only frozen source export, bounded offline history writer and CLI |
 | `backend/app/core/topics.py` and `backend/app/retrieval/` | Shared ordered vocabulary, normalized membership vectors, validated candidate-retrieval contracts and limits |
 | `backend/app/db/catalog.py` and `backend/app/retrieval/snapshots.py`, `cli.py` | Offline eligible catalog export, immutable Flat/HNSW artifacts, validated process-local reload and explicit CLI |
 | `backend/app/retrieval/current.py` | Current metadata filtering, bounded expansion, revision checks and marked exact/nonpersonalized fallback |
