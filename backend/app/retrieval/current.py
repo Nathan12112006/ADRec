@@ -3,6 +3,7 @@
 from collections.abc import Iterator
 from heapq import nsmallest
 from time import perf_counter
+from typing import Literal
 
 from pydantic import TypeAdapter
 from sqlalchemy import BigInteger, any_, cast, select
@@ -21,19 +22,37 @@ from app.retrieval.vectors import ad_vector, user_vector
 
 class CurrentCandidateRetriever:
     def __init__(
-        self, session: Session, snapshots: ActiveSnapshot, *, search_limit: int = 4000
+        self,
+        session: Session,
+        snapshots: ActiveSnapshot,
+        *,
+        search_limit: int = 4000,
+        ef_search: int | None = None,
     ) -> None:
         if type(search_limit) is not int or not 1 <= search_limit <= MAX_SEARCH_LIMIT:
             raise ValueError("search limit must be a positive integer within the expansion bound")
         self._session = session
         self._snapshots = snapshots
         self._search_limit = search_limit
+        if ef_search is not None and (
+            type(ef_search) is not int or not 1 <= ef_search <= MAX_SEARCH_LIMIT
+        ):
+            raise ValueError("ef_search must be a positive integer within the search bound")
+        self._ef_search = ef_search
 
     def retrieve(self, user: RetrievalUser, limit: int = 500) -> RetrievalResult:
         start = perf_counter()
         TypeAdapter(CandidateLimit).validate_python(limit)
         if limit > self._search_limit:
             raise ValueError("search limit must cover the candidate limit")
+        state = self._snapshots.status()
+        if (
+            self._ef_search is not None
+            and state.failure_reason is None
+            and state.snapshot is not None
+            and state.snapshot.manifest.hnsw is None
+        ):
+            raise ValueError("ef_search applies only to HNSW snapshots")
         statement = (
             select(*Ad.__table__.columns, Advertiser.active.label("advertiser_active"))
             .join(Advertiser, Ad.advertiser_id == Advertiser.id)
@@ -44,6 +63,8 @@ class CurrentCandidateRetriever:
         query = user_vector(user.interests)
         reason = "empty_interests" if query is None else "missing_index"
         index_version = None
+        indexed_mode: Literal["exact", "hnsw"] = "exact"
+        hnsw_ef_search = None
         vector_ms = 0.0
         fallback_ms = 0.0
         searched_count = 0
@@ -61,7 +82,6 @@ class CurrentCandidateRetriever:
                 )
                 fallback_ms = (perf_counter() - fallback_start) * 1000
             else:
-                state = self._snapshots.status()
                 snapshot = state.snapshot
                 if state.failure_reason is not None:
                     reason = state.failure_reason
@@ -77,7 +97,7 @@ class CurrentCandidateRetriever:
                         count = limit
                         while True:
                             vector_start = perf_counter()
-                            hits = snapshot.search(query, limit=count)
+                            hits = snapshot.search(query, limit=count, ef_search=self._ef_search)
                             vector_ms += (perf_counter() - vector_start) * 1000
                             searched_count += len(hits)
                             scores = {hit.ad_id: hit.similarity for hit in hits}
@@ -106,6 +126,13 @@ class CurrentCandidateRetriever:
                             reason = "stale_index"
                         elif len(candidates) == limit:
                             index_version = str(snapshot.manifest.snapshot_version)
+                            if snapshot.manifest.hnsw is not None:
+                                indexed_mode = "hnsw"
+                                hnsw_ef_search = (
+                                    self._ef_search
+                                    if self._ef_search is not None
+                                    else snapshot.manifest.hnsw.ef_search
+                                )
                         else:
                             reason = "insufficient_candidates"
                 if index_version is None:
@@ -140,8 +167,9 @@ class CurrentCandidateRetriever:
             candidates=candidates,
             mode="nonpersonalized"
             if query is None
-            else ("exact" if index_version else "exact_fallback"),
+            else (indexed_mode if index_version else "exact_fallback"),
             index_version=index_version,
+            hnsw_ef_search=hnsw_ef_search,
             requested_count=limit,
             elapsed_ms=elapsed_ms,
             vector_elapsed_ms=vector_ms,

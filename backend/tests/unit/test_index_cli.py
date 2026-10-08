@@ -4,7 +4,9 @@ import sys
 from pathlib import Path
 from uuid import UUID
 
-from app.retrieval.snapshots import IndexEntry, build_snapshot
+import pytest
+
+from app.retrieval.snapshots import HnswSettings, IndexEntry, build_snapshot
 from app.retrieval.vectors import ad_vector
 
 
@@ -79,3 +81,71 @@ def test_cli_missing_artifacts_and_invalid_threads_have_safe_failures(tmp_path: 
         )
         assert result.returncode == 2
         assert "Traceback" not in result.stderr
+
+
+def test_cli_hnsw_search_override_is_explicit_without_rewriting_artifacts(tmp_path: Path) -> None:
+    path = tmp_path / "hnsw"
+    build_snapshot(
+        path,
+        [IndexEntry(ad_id=42, vector=ad_vector([], category="technology"))],
+        dataset_id=UUID(int=1),
+        catalog_version="catalog-1",
+        hnsw=HnswSettings(),
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "app.retrieval.cli",
+            "load",
+            str(path),
+            "--interests",
+            "technology",
+            "--ef-search",
+            "32",
+            "--limit",
+            "1",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["hnsw_ef_search"] == 32
+    assert payload["manifest"]["hnsw"]["ef_search"] == 128
+    assert payload["hits"] == [{"ad_id": 42, "similarity": 1}]
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        ["--index", "flat", "--hnsw-m", "16"],
+        ["--index", "hnsw", "--hnsw-m", "1"],
+        ["--index", "hnsw", "--ef-construction", "0"],
+        ["--index", "hnsw", "--ef-search", "0"],
+    ],
+)
+def test_cli_rejects_invalid_or_wrong_family_settings_without_publishing(
+    tmp_path: Path, options: list[str]
+) -> None:
+    path = tmp_path / "rejected"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "app.retrieval.cli",
+            "build",
+            "--dataset-id",
+            str(UUID(int=1)),
+            "--output",
+            str(path),
+            *options,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert result.returncode == 2
+    assert "Traceback" not in result.stderr
+    assert not path.exists()

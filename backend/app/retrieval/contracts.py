@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
-from app.retrieval.limits import DEFAULT_CANDIDATE_LIMIT, CandidateLimit
+from app.retrieval.limits import DEFAULT_CANDIDATE_LIMIT, MAX_SEARCH_LIMIT, CandidateLimit
 from app.retrieval.vectors import ad_vector, user_vector
 
 
@@ -40,6 +40,7 @@ class RetrievalResult(BaseModel):
     candidates: tuple[RetrievalCandidate, ...]
     mode: Literal["exact", "hnsw", "exact_fallback", "nonpersonalized"]
     index_version: str | None = Field(default=None, min_length=1)
+    hnsw_ef_search: int | None = Field(default=None, strict=True, ge=1, le=MAX_SEARCH_LIMIT)
     vocabulary_version: Literal["topics-v1"] = "topics-v1"
     vector_version: Literal["binary-cosine-v1"] = "binary-cosine-v1"
     requested_count: CandidateLimit
@@ -64,6 +65,8 @@ class RetrievalResult(BaseModel):
 
     @model_validator(mode="after")
     def validate_candidates(self) -> "RetrievalResult":
+        if self.mode != "hnsw" and self.hnsw_ef_search is not None:
+            raise ValueError("only HNSW retrieval can report a nominal search depth")
         if self.mode in ("exact", "hnsw"):
             if self.index_version is None or self.fallback_reason is not None:
                 raise ValueError("indexed retrieval needs an index version and no fallback reason")

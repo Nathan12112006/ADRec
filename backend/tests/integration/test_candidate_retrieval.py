@@ -17,7 +17,7 @@ from app.db.session import Database
 from app.models.records import Ad, Advertiser, Dataset
 from app.retrieval.contracts import RetrievalUser
 from app.retrieval.current import CurrentCandidateRetriever
-from app.retrieval.snapshots import ActiveSnapshot, IndexEntry, build_snapshot
+from app.retrieval.snapshots import ActiveSnapshot, HnswSettings, IndexEntry, build_snapshot
 from app.retrieval.vectors import ad_vector
 
 
@@ -83,20 +83,26 @@ def test_missing_index_scores_current_inventory_and_preserves_small_counts(
     assert result.returned_count == 2
 
 
+@pytest.mark.parametrize("hnsw", [None, HnswSettings(m=16, ef_construction=80, ef_search=64)])
 def test_current_snapshot_uses_index_but_catalog_edits_force_visible_exact_fallback(
-    inventory: tuple[Session, UUID, list[Ad]], tmp_path: Path
+    inventory: tuple[Session, UUID, list[Ad]], tmp_path: Path, hnsw: HnswSettings | None
 ) -> None:
     session, dataset_id, ads = inventory
     catalog = read_catalog(session, dataset_id)
     build_snapshot(
-        tmp_path / "index", catalog.entries, dataset_id=dataset_id, catalog_version=catalog.version
+        tmp_path / "index",
+        catalog.entries,
+        dataset_id=dataset_id,
+        catalog_version=catalog.version,
+        hnsw=hnsw,
     )
     active = ActiveSnapshot()
     snapshot = active.reload(tmp_path / "index")
     retriever = CurrentCandidateRetriever(session, active)
     user = RetrievalUser(id=1, dataset_id=dataset_id, interests=("technology",))
     indexed = retriever.retrieve(user, limit=2)
-    assert indexed.mode == "exact"
+    assert indexed.mode == ("hnsw" if hnsw is not None else "exact")
+    assert indexed.hnsw_ef_search == (64 if hnsw is not None else None)
     assert indexed.index_version == str(snapshot.manifest.snapshot_version)
     assert [ad.id for ad in indexed.candidates] == [ads[0].id, ads[1].id]
     ads[0].active = False
@@ -109,13 +115,19 @@ def test_current_snapshot_uses_index_but_catalog_edits_force_visible_exact_fallb
 
 
 @pytest.mark.parametrize("failure", ["missing_index", "corrupt_index", "incompatible_index"])
+@pytest.mark.parametrize("hnsw", [None, HnswSettings()])
 def test_failed_reload_keeps_old_reference_but_retrieval_reports_degraded_operation(
-    inventory: tuple[Session, UUID, list[Ad]], tmp_path: Path, failure: str
+    inventory: tuple[Session, UUID, list[Ad]],
+    tmp_path: Path,
+    failure: str,
+    hnsw: HnswSettings | None,
 ) -> None:
     session, dataset_id, ads = inventory
     catalog = read_catalog(session, dataset_id)
     path = tmp_path / "index"
-    build_snapshot(path, catalog.entries, dataset_id=dataset_id, catalog_version=catalog.version)
+    build_snapshot(
+        path, catalog.entries, dataset_id=dataset_id, catalog_version=catalog.version, hnsw=hnsw
+    )
     active = ActiveSnapshot()
     old = active.reload(path)
     if failure == "missing_index":
@@ -140,6 +152,7 @@ def test_failed_reload_keeps_old_reference_but_retrieval_reports_degraded_operat
 @pytest.mark.parametrize(
     "search_limit,mode,expansions,searched", [(4, "exact", 2, 7), (2, "exact_fallback", 1, 3)]
 )
+@pytest.mark.parametrize("hnsw", [None, HnswSettings()])
 def test_missing_index_ids_expand_to_bound_then_use_marked_current_inventory_fallback(
     inventory: tuple[Session, UUID, list[Ad]],
     tmp_path: Path,
@@ -147,6 +160,7 @@ def test_missing_index_ids_expand_to_bound_then_use_marked_current_inventory_fal
     mode: str,
     expansions: int,
     searched: int,
+    hnsw: HnswSettings | None,
 ) -> None:
     session, dataset_id, ads = inventory
     ads[0].interests = ["gaming"]
@@ -162,6 +176,7 @@ def test_missing_index_ids_expand_to_bound_then_use_marked_current_inventory_fal
         (*catalog.entries, *missing),
         dataset_id=dataset_id,
         catalog_version=catalog.version,
+        hnsw=hnsw,
     )
     active = ActiveSnapshot()
     active.reload(tmp_path / "sparse")
@@ -170,7 +185,7 @@ def test_missing_index_ids_expand_to_bound_then_use_marked_current_inventory_fal
     )
     assert result.candidates[0].id == ads[0].id
     assert result.candidates[0].similarity == pytest.approx(0.70710678)
-    assert result.mode == mode
+    assert result.mode == ("hnsw" if mode == "exact" and hnsw is not None else mode)
     assert result.expansion_count == expansions
     assert result.searched_count == searched
     assert result.fallback_scanned_count == (3 if mode == "exact_fallback" else 0)
@@ -183,8 +198,12 @@ def test_missing_index_ids_expand_to_bound_then_use_marked_current_inventory_fal
 @pytest.mark.parametrize(
     "change", ["advertiser_off", "delete", "insert", "activate", "topics", "bid", "title"]
 )
+@pytest.mark.parametrize("hnsw", [None, HnswSettings()])
 def test_catalog_changes_use_current_metadata_and_cannot_silently_omit_inventory(
-    inventory: tuple[Session, UUID, list[Ad]], tmp_path: Path, change: str
+    inventory: tuple[Session, UUID, list[Ad]],
+    tmp_path: Path,
+    change: str,
+    hnsw: HnswSettings | None,
 ) -> None:
     session, dataset_id, ads = inventory
     if change == "activate":
@@ -192,7 +211,9 @@ def test_catalog_changes_use_current_metadata_and_cannot_silently_omit_inventory
         session.flush()
     catalog = read_catalog(session, dataset_id)
     path = tmp_path / "index"
-    build_snapshot(path, catalog.entries, dataset_id=dataset_id, catalog_version=catalog.version)
+    build_snapshot(
+        path, catalog.entries, dataset_id=dataset_id, catalog_version=catalog.version, hnsw=hnsw
+    )
     active = ActiveSnapshot()
     active.reload(path)
     expected_id: int | None = ads[0].id
@@ -440,3 +461,90 @@ def test_large_configured_expansion_can_batch_metadata_beyond_postgres_parameter
     assert result.mode == "exact"
     assert result.candidates[0].id == ads[0].id
     assert result.expansion_count == 16
+
+
+def test_hnsw_retriever_reports_query_depth_override_and_preserves_build_settings(
+    inventory: tuple[Session, UUID, list[Ad]], tmp_path: Path
+) -> None:
+    session, dataset_id, ads = inventory
+    catalog = read_catalog(session, dataset_id)
+    path = tmp_path / "hnsw"
+    build_snapshot(
+        path,
+        catalog.entries,
+        dataset_id=dataset_id,
+        catalog_version=catalog.version,
+        hnsw=HnswSettings(),
+    )
+    active = ActiveSnapshot()
+    snapshot = active.reload(path)
+    result = CurrentCandidateRetriever(session, active, ef_search=32).retrieve(
+        RetrievalUser(id=1, dataset_id=dataset_id, interests=("technology",)), limit=1
+    )
+    assert result.mode == "hnsw"
+    assert result.hnsw_ef_search == 32
+    assert result.candidates[0].id == ads[0].id
+    assert snapshot.manifest.hnsw == HnswSettings()
+
+
+@pytest.mark.parametrize("hnsw", [None, HnswSettings(m=16, ef_construction=80, ef_search=1024)])
+def test_index_families_share_tied_candidate_cap_nonpersonalized_and_small_inventory_contracts(
+    inventory: tuple[Session, UUID, list[Ad]], tmp_path: Path, hnsw: HnswSettings | None
+) -> None:
+    session, dataset_id, ads = inventory
+    for ad in ads:
+        ad.category = "technology"
+        ad.interests = []
+    extra = [
+        Ad(
+            dataset_id=dataset_id,
+            advertiser_id=ads[0].advertiser_id,
+            title=f"Tie {number}",
+            description="Fixture",
+            target_url="https://example.test",
+            category="technology",
+            interests=[],
+            bid=Decimal("1"),
+            active=True,
+        )
+        for number in range(500)
+    ]
+    session.add_all(extra)
+    session.flush()
+    catalog = read_catalog(session, dataset_id)
+    path = tmp_path / "index"
+    build_snapshot(
+        path, catalog.entries, dataset_id=dataset_id, catalog_version=catalog.version, hnsw=hnsw
+    )
+    active = ActiveSnapshot()
+    active.reload(path)
+    retriever = CurrentCandidateRetriever(session, active)
+    user = RetrievalUser(id=1, dataset_id=dataset_id, interests=("technology",))
+    result = retriever.retrieve(user)
+    ids = [ad.id for ad in result.candidates]
+    if hnsw is None:
+        assert result.mode == "exact"
+    else:
+        assert result.mode in ("hnsw", "exact_fallback")
+        if result.mode == "exact_fallback":
+            assert result.fallback_reason == "insufficient_candidates"
+            assert result.fallback_scanned_count == 503
+    assert len(ids) == len(set(ids)) == 500
+    assert set(ids) <= {ad.id for ad in [*ads, *extra]}
+    assert ids == sorted(ids)
+    assert all(ad.similarity == pytest.approx(1) for ad in result.candidates)
+    nonpersonalized = retriever.retrieve(user.model_copy(update={"interests": ()}), limit=2)
+    assert nonpersonalized.mode == "nonpersonalized"
+    assert [ad.id for ad in nonpersonalized.candidates] == [ads[1].id, ads[2].id]
+    assert all(ad.similarity is None for ad in nonpersonalized.candidates)
+    session.execute(
+        update(Ad).where(Ad.dataset_id == dataset_id, Ad.id != ads[0].id).values(active=False)
+    )
+    limited = retriever.retrieve(user)
+    assert limited.returned_count == 1
+    assert limited.candidates[0].id == ads[0].id
+    assert limited.fallback_reason == "stale_index"
+    session.execute(
+        update(Advertiser).where(Advertiser.id == ads[0].advertiser_id).values(active=False)
+    )
+    assert retriever.retrieve(user).candidates == ()

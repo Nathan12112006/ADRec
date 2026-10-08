@@ -8,7 +8,7 @@ Health checks, structured request logging and a backend/PostgreSQL Docker demo a
 Phase 1's technical gate passed on 2026-10-07: fresh migrations/default seeding,
 Docker and local startup, lifecycle replay/count reconciliation, database-outage health
 behavior, and 186 unit/PostgreSQL tests. See [ticket 10's commands and evidence](.scratch/adflow-implementation/issues/10-phase-one-gate.md).
-Phase 2 topic vectors, offline exact FAISS snapshots and current-inventory candidate
+Phase 2 topic vectors, CPU Flat/HNSW snapshots and current-inventory candidate
 retrieval with marked fallback are available. Serving integration, CTR modeling,
 experiments, Redis, dashboards and performance benchmarks remain planned work.
 The separate [lifecycle learning checkpoint](.scratch/adflow-implementation/issues/57-learning-lifecycle.md)
@@ -419,7 +419,7 @@ Returned count is a Pydantic computed field so it cannot disagree with candidate
 Its narrowly scoped mypy decorator suppression follows the
 [Pydantic computed-field guidance](https://docs.pydantic.dev/latest/api/fields/#pydantic.fields.computed_field).
 
-## Offline exact FAISS snapshots
+## Offline CPU FAISS snapshots
 
 CPU FAISS is pinned to `faiss-cpu==1.15.1`. NumPy is pinned to `2.2.6` for Python
 3.10–3.13 and `2.3.5` for Python 3.14, whose wheels need the newer pin. Native Windows
@@ -482,6 +482,11 @@ metric/dtype, count, native build thread count, runtime/library/build identity, 
 checksums. Build stages a sibling directory, validates a complete reload, then renames it
 into place. Failed writes never publish a partial output version.
 
+New snapshots use schema 2 / builder `cpu-snapshot-v2` and declare `index_type` plus
+`hnsw` settings (null for Flat). The loader also accepts original schema 1 /
+`flat-snapshot-v1` Flat artifacts with their original version identity. HNSW artifacts
+require every declared setting and native graph/storage agreement before activation.
+
 `load_snapshot(path)` reads each payload once, validates checksums before native decoding,
 checks complete schema/runtime/mapping/index agreement, and revalidates every stored vector
 in batches. It conservatively requires exact FAISS/NumPy/Python version, OS/architecture,
@@ -513,6 +518,61 @@ serialized and native copies, with additional O(N*D) memory; validation scans ev
 and uses batches of at most 1,000. Flat search scans stored vectors, with candidate
 selection/sorting overhead. These are algorithm costs, not benchmarks or a 100,000-ad claim.
 Normalized inner-product behavior follows [FAISS metric documentation](https://github.com/facebookresearch/faiss/wiki/MetricType-and-distances).
+
+## Opt-in HNSW comparison
+
+Flat remains the default build and intended initial serving option. To prepare one CPU
+`IndexHNSWFlat` comparison, use the same dataset and vectors with an explicit opt-in:
+
+```powershell
+docker compose run --rm backend python -m app.retrieval.cli build --dataset-id $datasetId --output /artifacts/hnsw-v1 --index hnsw --hnsw-m 32 --ef-construction 200 --ef-search 128 --threads 1
+docker compose run --rm backend python -m app.retrieval.cli load /artifacts/hnsw-v1 --interests technology gaming --limit 500 --ef-search 256 --threads 1
+```
+
+Local installed CLI equivalents use `uv run --locked adflow-index` from `backend/`.
+HNSW arguments on a Flat build are rejected. A load-time `--ef-search` requires a cosine
+query and an HNSW snapshot; it changes that query only. CLI JSON reports `hnsw_ef_search`
+separately from the original persisted manifest. The common snapshot API accepts
+`build_snapshot(..., hnsw=HnswSettings(...))`; omitting `hnsw` builds Flat.
+
+| Setting | Default | Project bounds | Purpose |
+| --- | --- | --- | --- |
+| `m` / `--hnsw-m` | 32 | Integer 2–128 | Graph connectivity; base layer reserves 2*M neighbor slots |
+| `ef_construction` / `--ef-construction` | 200 | Integer M–1,000,000 | Build exploration depth |
+| `ef_search` / `--ef-search` | 128 | Integer 1–1,000,000 | Search exploration depth |
+| `--threads` | 1 | Integer 1–64 | Offline process OpenMP threads; recorded at build |
+
+These bounds are project validation choices, not measured tuning results. The pinned
+builder uses bounded queues and relative-distance checks; runtime/build identity and
+the builder version identify that fixed policy. Search creates a fresh native
+`SearchParametersHNSW` for each call, so concurrent depth overrides do not modify the
+shared graph. The pinned FAISS stubs omit this native parameter class and a few graph
+attributes; one narrow suppression and a small protocol cover those verified native APIs.
+See [FAISS HNSW settings](https://github.com/facebookresearch/faiss/wiki/Faiss-indexes#indexhnsw-variants)
+and [per-query parameters](https://github.com/facebookresearch/faiss/wiki/Setting-search-parameters-for-one-query).
+
+`CurrentCandidateRetriever(session, active, ef_search=256)` uses a per-query override;
+without it, the loaded manifest supplies the depth. Successful approximate retrieval
+reports mode `hnsw`, its snapshot version and `hnsw_ef_search`. Both families share current
+metadata filtering, expansion bounds and exact fallback. Fallback/empty-interest results
+carry their fallback mode/reason and no nominal HNSW depth/index version. Flat rejects
+HNSW-only overrides. Loading an HNSW snapshot for an explicit comparison does not promote
+it or change API startup/serving defaults.
+
+HNSW adds graph construction and memory to the same 13-dimensional float32 vectors.
+FAISS describes roughly `4*D + 8*M` bytes per stored vector, before ID mapping, node/level
+metadata, allocator/runtime and temporary build/load copies; actual artifact bytes and
+memory must be recorded separately. Search explores a data-dependent graph; no universal
+query complexity, speedup or full candidate coverage is promised. Highly duplicated/tied
+vectors can leave too few approximate hits even with a high search depth, triggering the
+same visible exact fallback. Tests allow interchangeable boundary members, then require
+eligible distinct bounded candidates and consistent similarity/ID ordering.
+
+Ticket 14 smoke evidence records actual small-data build/load/search times and artifact
+sizes, not warmed latency distributions or a promotion result. Ticket 16 owns controlled
+quality/cost comparisons and the 100,000-ad evidence. HNSW can replace the exact default
+only after lower full-retrieval P95 and at least 95% canonical tie-aware recall are measured
+on the declared query set, including fallback cost. IVF, compression and GPU remain deferred.
 
 ## Current-inventory candidate retrieval
 
@@ -579,7 +639,7 @@ may still scan/sort eligible rows. Analyze fallback separately from nominal inde
 
 Exact fallback costs O(N*D + N log K) time with O(K + B) candidate/streaming space for
 eligible count N, candidate cap K and database fetch batch B=1000. Index expansion repeats
-flat scans and holds up to the configured bound of IDs in memory. Revision writes serialize
+Flat scans or HNSW traversals and holds up to the configured bound of IDs in memory. Revision writes serialize
 per dataset and offline export locks delay catalog commits; contention is a tradeoff to measure.
 Default READ COMMITTED sessions observe committed changes between queries. Retrieval does
 not lock selected ads: existing selection-time ad/advertiser locking and revalidation remain
@@ -596,7 +656,7 @@ uv run --locked pytest tests/integration/test_candidate_retrieval.py tests/integ
 Focused checks from `backend/` (PostgreSQL opt-in as above):
 
 ```powershell
-uv run --locked pytest tests/unit/test_index_snapshots.py tests/unit/test_index_cli.py tests/integration/test_index_catalog.py
+uv run --locked pytest tests/unit/test_index_snapshots.py tests/unit/test_hnsw_snapshots.py tests/unit/test_index_cli.py tests/integration/test_index_catalog.py
 uv run --locked mypy
 ```
 
@@ -883,7 +943,7 @@ application-only deduplication; no throughput claim is made.
 | `backend/tests/integration/` | Opt-in PostgreSQL constraints, snapshots, rollback, and wait limits |
 | `backend/app/seeding/` | Versioned entity generator, atomic append/no-op persistence, seed CLI |
 | `backend/app/core/topics.py` and `backend/app/retrieval/` | Shared ordered vocabulary, normalized membership vectors, validated candidate-retrieval contracts and limits |
-| `backend/app/db/catalog.py` and `backend/app/retrieval/snapshots.py`, `cli.py` | Offline eligible catalog export, immutable exact FAISS artifacts, validated process-local reload and explicit CLI |
+| `backend/app/db/catalog.py` and `backend/app/retrieval/snapshots.py`, `cli.py` | Offline eligible catalog export, immutable Flat/HNSW artifacts, validated process-local reload and explicit CLI |
 | `backend/app/retrieval/current.py` | Current metadata filtering, bounded expansion, revision checks and marked exact/nonpersonalized fallback |
 | `backend/app/ranking/` and `backend/app/db/selection.py` | Pure deterministic baseline and streamed eligible-inventory reader |
 | `backend/app/services/recommendations.py` and `backend/app/core/errors.py` | Atomic recommendation/no-ad opportunities, durable replay and safe workflow failures |

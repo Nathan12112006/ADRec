@@ -58,7 +58,7 @@ def test_corrupted_payload_checksum_is_rejected_before_loading(
 @pytest.mark.parametrize(
     "field,value",
     [
-        ("schema_version", 2),
+        ("schema_version", 999),
         ("builder_version", "future-builder"),
         ("runtime.faiss_version", "0.0.0"),
         ("runtime.numpy_version", "0.0.0"),

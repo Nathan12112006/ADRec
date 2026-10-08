@@ -132,9 +132,11 @@ def test_invalid_eligible_topics_abort_export(
         read_catalog(session, dataset_id)
 
 
+@pytest.mark.parametrize("index", ["flat", "hnsw"])
 def test_cli_builds_from_the_isolated_database_and_reloads_in_a_fresh_process(
     database: Database,
     tmp_path: Path,
+    index: str,
 ) -> None:
     config = SeedConfig(seed=uuid4().int % (2**63), users=1, advertisers=1, ads=6)
     seed_database(database, config, append=True)
@@ -151,6 +153,20 @@ def test_cli_builds_from_the_isolated_database_and_reloads_in_a_fresh_process(
             str(config.dataset_id),
             "--output",
             str(path),
+            *(
+                [
+                    "--index",
+                    "hnsw",
+                    "--hnsw-m",
+                    "16",
+                    "--ef-construction",
+                    "80",
+                    "--ef-search",
+                    "64",
+                ]
+                if index == "hnsw"
+                else []
+            ),
         ],
         capture_output=True,
         text=True,
@@ -160,6 +176,10 @@ def test_cli_builds_from_the_isolated_database_and_reloads_in_a_fresh_process(
     manifest = json.loads(built.stdout)["manifest"]
     assert manifest["dataset_id"] == str(config.dataset_id)
     assert manifest["count"] == 6
+    assert manifest["index_type"] == ("IndexHNSWFlat" if index == "hnsw" else "IndexFlatIP")
+    assert manifest["hnsw"] == (
+        {"m": 16, "ef_construction": 80, "ef_search": 64} if index == "hnsw" else None
+    )
     loaded = subprocess.run(
         [
             sys.executable,
