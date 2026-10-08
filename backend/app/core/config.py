@@ -11,6 +11,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict, SettingsError
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
+from app.retrieval.limits import DEFAULT_CANDIDATE_LIMIT, MAX_CANDIDATE_LIMIT, MAX_SEARCH_LIMIT
+
 DEFAULT_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 
 
@@ -32,6 +34,16 @@ class Settings(BaseSettings):
     db_lock_timeout_seconds: int = Field(default=3, ge=1, le=30)
     db_pool_size: int = Field(default=5, ge=1, le=20)
     db_max_overflow: int = Field(default=5, ge=0, le=20)
+    retrieval_candidate_limit: int = Field(
+        default=DEFAULT_CANDIDATE_LIMIT, ge=1, le=MAX_CANDIDATE_LIMIT
+    )
+    retrieval_search_limit: int = Field(default=4000, ge=1, le=MAX_SEARCH_LIMIT)
+
+    @model_validator(mode="after")
+    def validate_retrieval_limits(self) -> Settings:
+        if self.retrieval_search_limit < self.retrieval_candidate_limit:
+            raise ValueError("retrieval search limit must cover the candidate limit")
+        return self
 
     @field_validator("database_url", "test_database_url")
     @classmethod

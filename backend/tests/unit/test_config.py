@@ -9,6 +9,50 @@ APP_URL = "postgresql+psycopg://demo:private-password@localhost:5432/adflow"
 TEST_URL = "postgresql+psycopg://demo:private-password@localhost:5432/adflow_test"
 
 
+@pytest.mark.parametrize(
+    "name,value",
+    [
+        ("RETRIEVAL_CANDIDATE_LIMIT", "0"),
+        ("RETRIEVAL_CANDIDATE_LIMIT", "501"),
+        ("RETRIEVAL_SEARCH_LIMIT", "0"),
+        ("RETRIEVAL_SEARCH_LIMIT", "1000001"),
+    ],
+)
+def test_retrieval_environment_limits_are_positive_and_bounded(
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+    value: str,
+) -> None:
+    monkeypatch.setenv("ADFLOW_DATABASE_URL", APP_URL)
+    monkeypatch.setenv("ADFLOW_TEST_DATABASE_URL", TEST_URL)
+    monkeypatch.setenv(f"ADFLOW_{name}", value)
+    with pytest.raises(ConfigurationError):
+        load_settings(env_file=None)
+
+
+def test_search_expansion_bound_cannot_be_smaller_than_candidate_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ADFLOW_DATABASE_URL", APP_URL)
+    monkeypatch.setenv("ADFLOW_TEST_DATABASE_URL", TEST_URL)
+    monkeypatch.setenv("ADFLOW_RETRIEVAL_CANDIDATE_LIMIT", "500")
+    monkeypatch.setenv("ADFLOW_RETRIEVAL_SEARCH_LIMIT", "499")
+    with pytest.raises(ConfigurationError):
+        load_settings(env_file=None)
+
+
+def test_retrieval_limits_load_from_environment_without_changing_their_meaning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ADFLOW_DATABASE_URL", APP_URL)
+    monkeypatch.setenv("ADFLOW_TEST_DATABASE_URL", TEST_URL)
+    monkeypatch.setenv("ADFLOW_RETRIEVAL_CANDIDATE_LIMIT", "25")
+    monkeypatch.setenv("ADFLOW_RETRIEVAL_SEARCH_LIMIT", "250")
+    settings = load_settings(env_file=None)
+    assert settings.retrieval_candidate_limit == 25
+    assert settings.retrieval_search_limit == 250
+
+
 def test_missing_database_settings_are_reported_without_values(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

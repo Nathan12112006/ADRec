@@ -8,7 +8,7 @@ Health checks, structured request logging and a backend/PostgreSQL Docker demo a
 Phase 1's technical gate passed on 2026-10-07: fresh migrations/default seeding,
 Docker and local startup, lifecycle replay/count reconciliation, database-outage health
 behavior, and 186 unit/PostgreSQL tests. See [ticket 10's commands and evidence](.scratch/adflow-implementation/issues/10-phase-one-gate.md).
-Candidate retrieval (Phase 2) is the next implementation phase. FAISS, CTR modeling,
+Phase 2 topic vectors and candidate-retrieval contracts are available. FAISS, CTR modeling,
 experiments, Redis, dashboards and performance benchmarks remain planned work.
 The separate [lifecycle learning checkpoint](.scratch/adflow-implementation/issues/57-learning-lifecycle.md)
 remains open; passing software checks does not certify human understanding.
@@ -157,6 +157,8 @@ Names have the `ADFLOW_` prefix. Unknown dotenv keys fail validation to catch mi
 | `DB_LOCK_TIMEOUT_SECONDS` | 3 | Integer, 1–30 seconds waiting for a PostgreSQL lock |
 | `DB_POOL_SIZE` | 5 | Integer, 1–20 connections |
 | `DB_MAX_OVERFLOW` | 5 | Integer, 0–20 additional connections |
+| `RETRIEVAL_CANDIDATE_LIMIT` | 500 | Integer, 1–500 candidates; not yet used by serving |
+| `RETRIEVAL_SEARCH_LIMIT` | 4000 | Integer, 1–1,000,000; at least candidate limit; future search expansion bound |
 
 Database URLs use `postgresql+psycopg://user:password@host:port/database`. URL-encode
 special characters in credentials. Query options are rejected so alternate hosts/database
@@ -344,6 +346,77 @@ Remove-Item Env:ADFLOW_RUN_POSTGRES_TESTS
 Database selector fixtures temporarily hide existing ads and add edge inventory inside
 rollback-only test transactions. They never commit those edits or clear history. Use
 the dedicated test database and run this suite serially, as with the other integration checks.
+
+## Topic vectors and candidate-retrieval contract
+
+Ticket 11 adds pure vector construction and validated retrieval inputs/results. The HTTP
+recommendation workflow still uses the Phase 1 overlap selector. FAISS build/reload,
+database-backed filtering/backfill and nonpersonalized retrieval, and serving integration
+arrive in subsequent Phase 2 tickets; no index or speedup is claimed here.
+
+`app.core.topics.TOPICS` preserves the seed generator's 13-topic order, versioned as
+`topics-v1`. `app.retrieval.vectors.user_vector(interests)` returns a frozen `TopicVector`
+or `None` for an empty-interest user. `ad_vector(interests, category=...)` includes the
+union of interests and category exactly once. Nonempty binary membership is divided by
+the square root of its distinct topic count (`binary-cosine-v1`); its inner product is
+cosine similarity. For example, technology alone versus technology/gaming scores
+approximately 0.70710678. Bids never enter these vectors, and there are no padded dimensions.
+
+Vectors validate exact vocabulary order/versions, 13 dimensions, finite nonnegative
+values and normalized binary membership. Unknown topics/categories and zero-vector ads
+are errors. Loading permits absolute per-coordinate error up to 1e-6 for float32 round
+trips; the pure similarity helper clamps tiny rounding overshoots at one. A vocabulary
+or vector-rule change requires a new version and compatible rebuilt artifacts. Seeding
+imports the same ordered topics; its manifest format and dataset identities are unchanged.
+
+`CandidateRetriever.retrieve(user, limit=500)` is a typed interface, with no concrete
+search implementation yet. `RetrievalUser` supplies user ID, dataset ID and interests.
+`RetrievalCandidate` supplies stable ad/advertiser/dataset IDs, current ad payload,
+decimal bid, eligibility flags and nullable similarity. Constructing a candidate rejects
+inactive flags, invalid IDs/money/topics and nonfinite/out-of-range similarity. Callers
+must batch-load current metadata and recheck selection-time eligibility; a frozen
+result cannot guarantee that catalog data stays current after retrieval.
+
+`RetrievalResult` reports mode, index version when applicable, vector/vocabulary versions,
+requested count, derived returned count, full retrieval `elapsed_ms`, and fallback reason.
+It rejects duplicate/excess candidates and inconsistent order/diagnostics:
+
+| Mode | Ordering and scores | Index/fallback diagnostics |
+| --- | --- | --- |
+| `exact` / `hnsw` | Descending cosine similarity, ascending ad ID for ties | Required index version; no fallback reason |
+| `exact_fallback` | Same cosine order | No active index; `missing_index`, `corrupt_index`, `incompatible_index`, `stale_index` or `insufficient_candidates` |
+| `nonpersonalized` | Descending bid, ascending ad ID; similarity is null | No index; `empty_interests` |
+
+Empty-interest users bypass cosine search. The nonpersonalized contract specifies bid
+order; its actual current-inventory implementation belongs to ticket 13. Limited inventory
+may yield fewer candidates or zero. Database failures must propagate to the existing 503
+handling rather than masquerade as empty inventory. Retrieval timing must include metadata,
+filtering, expansion and fallback, and use a monotonic clock in concrete implementations.
+Ranking chooses the winner afterward. Phase 1 overlap counts shared interests without
+normalization or category union; cosine retrieval and ranking overlap have different meanings.
+Boundary ties may have interchangeable membership; returned members still follow consistent order.
+
+`ADFLOW_RETRIEVAL_CANDIDATE_LIMIT` defaults to 500 and accepts 1–500;
+`ADFLOW_RETRIEVAL_SEARCH_LIMIT` defaults to 4,000 and accepts 1–1,000,000, at least the
+candidate limit. The latter bounds future filtered-search expansion before exact fallback;
+it does not cap eligible-inventory fallback scans or represent a measured tuning result.
+Both settings load locally and pass through Compose. They do not alter Phase 1 serving yet.
+
+Construction/validation costs O(D + I) time and O(D + I) working space for D vocabulary
+dimensions and I input interests. Similarity takes O(D) time. Result validation uses
+O(K log K) time and O(K) space for K candidates (at most 500), plus candidate topic
+validation. These are algorithm costs, not measured latency claims.
+
+Focused checks from `backend/`:
+
+```powershell
+uv run --locked pytest tests/unit/test_topic_vectors.py tests/unit/test_retrieval_contract.py tests/unit/test_config.py tests/unit/test_seed_generation.py
+uv run --locked mypy
+```
+
+Returned count is a Pydantic computed field so it cannot disagree with candidates.
+Its narrowly scoped mypy decorator suppression follows the
+[Pydantic computed-field guidance](https://docs.pydantic.dev/latest/api/fields/#pydantic.fields.computed_field).
 
 ## Recommendation workflow
 
@@ -622,6 +695,7 @@ application-only deduplication; no throughput claim is made.
 | `backend/tests/unit/test_app.py` | Factory and synchronous dependency behavior through TestClient |
 | `backend/tests/integration/` | Opt-in PostgreSQL constraints, snapshots, rollback, and wait limits |
 | `backend/app/seeding/` | Versioned entity generator, atomic append/no-op persistence, seed CLI |
+| `backend/app/core/topics.py` and `backend/app/retrieval/` | Shared ordered vocabulary, normalized membership vectors, validated candidate-retrieval contracts and limits |
 | `backend/app/ranking/` and `backend/app/db/selection.py` | Pure deterministic baseline and streamed eligible-inventory reader |
 | `backend/app/services/recommendations.py` and `backend/app/core/errors.py` | Atomic recommendation/no-ad opportunities, durable replay and safe workflow failures |
 | `backend/app/services/events.py` and `backend/app/core/clock.py` | Idempotent client events, captured-bid credit and shared server UTC clock |

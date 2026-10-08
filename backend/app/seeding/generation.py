@@ -11,22 +11,9 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.core.topics import TOPICS
+
 GENERATOR_VERSION = "entities-v1"
-TOPICS = (
-    "technology",
-    "gaming",
-    "fitness",
-    "travel",
-    "food",
-    "fashion",
-    "sports",
-    "finance",
-    "education",
-    "music",
-    "movies",
-    "photography",
-    "cars",
-)
 RELATED = {topic: [topic] for topic in TOPICS}
 RELATED.update(
     {
