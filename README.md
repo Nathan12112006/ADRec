@@ -199,6 +199,46 @@ See [SQLAlchemy bulk inserts](https://docs.sqlalchemy.org/en/20/orm/queryguide/d
 and [Python random reproducibility](https://docs.python.org/3.10/library/random.html#notes-on-reproducibility)
 for the underlying APIs. Seed tests run with the normal unit/PostgreSQL commands above.
 
+## Baseline selection
+
+`app.ranking.select_baseline(user_interests, candidates)` is a pure selector over an
+iterable of immutable `BaselineCandidate` values. It returns the winning candidate or
+`None` for a no-ad outcome. Only active ads from active advertisers qualify. Distinct
+shared interests rank first, then the higher decimal bid, then ascending ad ID. Duplicated
+interests count once; empty interests/no overlaps reduce selection to bid and ID.
+Zero bids remain eligible. Eligible negative or nonfinite bids raise `ValueError`.
+Ad category is not added to target interests for this baseline. No model is invoked
+and no predicted CTR is produced.
+
+`app.db.selection.select_baseline_ad(session, user_interests)` reads current eligible
+inventory through a PostgreSQL join and supplies it to that same selector. It streams
+only ID, interests and bid in batches of up to 1,000 rows. It returns a detached immutable
+candidate and closes the result cursor; the caller owns the session/transaction. This
+read does not lock inventory or save recommendations. Ticket 05 owns persistence and
+eligibility/bid revalidation before a recommendation is committed.
+
+With N eligible ads, U user interests and up to A interests per ad, expected hash-set
+selection work is O(U + N*A), with O(U + A) selector working space. The database adapter
+adds O(B*A) client buffering for batch size B=1,000, plus driver overhead. The database
+still scans/joins inventory and transmits every eligible candidate; this is not a
+serving performance claim. Later candidate retrieval bounds the set passed to selection.
+SQLAlchemy documents the streaming behavior in
+[Fetching large result sets with yield_per](https://docs.sqlalchemy.org/en/20/orm/queryguide/api.html#fetching-large-result-sets-with-yield-per).
+
+Focused checks from `backend/`:
+
+```powershell
+uv run --locked pytest tests/unit/test_baseline.py
+# With the isolated PostgreSQL test URL configured:
+$env:ADFLOW_RUN_POSTGRES_TESTS = "1"
+uv run --locked pytest tests/integration/test_baseline_selection.py
+Remove-Item Env:ADFLOW_RUN_POSTGRES_TESTS
+```
+
+Database selector fixtures temporarily hide existing ads and add edge inventory inside
+rollback-only test transactions. They never commit those edits or clear history. Use
+the dedicated test database and run this suite serially, as with the other integration checks.
+
 ## Persistence contract
 
 `datasets` records identity, seed, generator version and JSON configuration. Users,
@@ -248,6 +288,7 @@ application-only deduplication; no throughput claim is made.
 | `backend/tests/unit/test_app.py` | Factory and synchronous dependency behavior through TestClient |
 | `backend/tests/integration/` | Opt-in PostgreSQL constraints, snapshots, rollback, and wait limits |
 | `backend/app/seeding/` | Versioned entity generator, atomic append/no-op persistence, seed CLI |
+| `backend/app/ranking/` and `backend/app/db/selection.py` | Pure deterministic baseline and streamed eligible-inventory reader |
 | `backend/tests/unit/test_seed_generation.py` and `test_seed_cli.py` | Reproducibility, stream independence, validation and CLI checks |
 | `backend/pyproject.toml` | Package, dependency ranges, pytest, Ruff, strict mypy configuration |
 | `backend/uv.lock` | Reproducible resolved dependency versions |
