@@ -37,9 +37,12 @@ services:
       ADFLOW_RETRIEVAL_SEARCH_LIMIT: ${ADFLOW_RETRIEVAL_SEARCH_LIMIT:-4000}
     ports:
       - "127.0.0.1:8000:8000"
+    volumes:
+      - index_artifacts:/artifacts
     depends_on:
       postgres:
         condition: service_healthy
 
 volumes:
   postgres_data:
+  index_artifacts:

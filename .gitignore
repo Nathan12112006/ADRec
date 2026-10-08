@@ -15,3 +15,4 @@ dist/
 htmlcov/
 .uv-cache/
 .local-postgres/
+/artifacts/

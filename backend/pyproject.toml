@@ -15,6 +15,9 @@ dependencies = [
   "alembic>=1.14,<2",
   "psycopg[binary]>=3.2,<4",
   "uvicorn>=0.34,<1",
+  "faiss-cpu==1.15.1",
+    "numpy==2.2.6; python_version < '3.14'",
+    "numpy==2.3.5; python_version >= '3.14'",
 ]
 
 [dependency-groups]
@@ -28,6 +31,7 @@ dev = [
 
 [project.scripts]
 adflow-seed = "app.seeding.cli:main"
+adflow-index = "app.retrieval.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]

@@ -8,7 +8,8 @@ Health checks, structured request logging and a backend/PostgreSQL Docker demo a
 Phase 1's technical gate passed on 2026-10-07: fresh migrations/default seeding,
 Docker and local startup, lifecycle replay/count reconciliation, database-outage health
 behavior, and 186 unit/PostgreSQL tests. See [ticket 10's commands and evidence](.scratch/adflow-implementation/issues/10-phase-one-gate.md).
-Phase 2 topic vectors and candidate-retrieval contracts are available. FAISS, CTR modeling,
+Phase 2 topic vectors, candidate-retrieval contracts and offline exact FAISS snapshots
+are available. Serving integration, CTR modeling,
 experiments, Redis, dashboards and performance benchmarks remain planned work.
 The separate [lifecycle learning checkpoint](.scratch/adflow-implementation/issues/57-learning-lifecycle.md)
 remains open; passing software checks does not certify human understanding.
@@ -349,10 +350,10 @@ the dedicated test database and run this suite serially, as with the other integ
 
 ## Topic vectors and candidate-retrieval contract
 
-Ticket 11 adds pure vector construction and validated retrieval inputs/results. The HTTP
-recommendation workflow still uses the Phase 1 overlap selector. FAISS build/reload,
-database-backed filtering/backfill and nonpersonalized retrieval, and serving integration
-arrive in subsequent Phase 2 tickets; no index or speedup is claimed here.
+Ticket 11 adds pure vector construction and validated retrieval inputs/results; ticket 12
+adds offline exact FAISS snapshots below. The HTTP recommendation workflow still uses
+the Phase 1 overlap selector. Database-backed filtering/backfill, nonpersonalized retrieval
+and serving integration arrive in subsequent Phase 2 tickets; no speedup is claimed here.
 
 `app.core.topics.TOPICS` preserves the seed generator's 13-topic order, versioned as
 `topics-v1`. `app.retrieval.vectors.user_vector(interests)` returns a frozen `TopicVector`
@@ -417,6 +418,107 @@ uv run --locked mypy
 Returned count is a Pydantic computed field so it cannot disagree with candidates.
 Its narrowly scoped mypy decorator suppression follows the
 [Pydantic computed-field guidance](https://docs.pydantic.dev/latest/api/fields/#pydantic.fields.computed_field).
+
+## Offline exact FAISS snapshots
+
+CPU FAISS is pinned to `faiss-cpu==1.15.1`. NumPy is pinned to `2.2.6` for Python
+3.10–3.13 and `2.3.5` for Python 3.14, whose wheels need the newer pin. Native Windows
+CPython 3.10.11 and Linux container CPython 3.12.15 passed real build/search/persistence/
+reload checks with NumPy 2.2.6. Python 3.14 and other architectures remain unverified.
+Package-wheel availability comes from [FAISS](https://pypi.org/project/faiss-cpu/1.15.1/)
+and [NumPy](https://pypi.org/project/numpy/2.3.5/); successful installation alone is not
+runtime compatibility evidence.
+
+After explicit migrations and entity seeding, prepare a new immutable version from one
+dataset. From the root with Compose running:
+
+```powershell
+$datasetId = (docker compose exec -T postgres psql -U adflow -d adflow -Atc 'SELECT id FROM datasets ORDER BY created_at LIMIT 1').Trim()
+docker compose run --rm backend python -m app.retrieval.cli build --dataset-id $datasetId --output /artifacts/exact-v1
+docker compose run --rm backend python -m app.retrieval.cli load /artifacts/exact-v1 --dataset-id $datasetId --interests technology gaming --limit 3
+```
+
+Choose the intended dataset explicitly if multiple datasets exist. `build --database test`
+selects the isolated test URL; application is the default. Build never migrates, seeds,
+replaces catalog data or overwrites an existing version directory. CLI JSON reports the
+complete manifest, and `load` optionally reports vector-search hits. `--threads` defaults
+to one (accepts 1–64) and configures this offline command's native threads. Search returns
+database IDs, not FAISS row positions. It orders returned members by descending cosine
+then ascending ad ID; membership among equal boundary scores may differ. Low-level search
+accepts 1–1,000,000 hits to support future bounded expansion; downstream candidate results
+remain capped at 500. Empty-user nonpersonalized retrieval belongs to ticket 13 and is not
+a cosine-query option in this CLI.
+
+Compose's project-scoped `index_artifacts` volume mounts at `/artifacts`, owned by runtime
+UID/GID 10001. Normal `down` retains this volume alongside PostgreSQL data. Build/reload
+remain explicit: ordinary API startup creates no index. Store each complete version in
+its own new directory; retain old versions for in-flight work and reproducibility.
+
+For local operation, use the existing host database settings and run from `backend/`:
+
+```powershell
+uv sync --locked
+uv run --locked adflow-index build --dataset-id $datasetId --output ../artifacts/exact-local-v1
+uv run --locked adflow-index load ../artifacts/exact-local-v1 --interests technology gaming --limit 3
+```
+
+Root `artifacts/` is ignored by Git; preserve needed artifacts separately. The container
+runs source directly, so its command is `python -m app.retrieval.cli`; local editable
+installation also supplies `adflow-index`.
+
+`read_catalog(session, dataset_id)` scans one dataset's ads and advertiser eligibility in
+one PostgreSQL MVCC statement snapshot. It fingerprints relevant current ad metadata,
+including inactive rows, then exports only active ads with active advertisers. The
+`catalog-v1` content digest includes dataset identity, ad IDs, metadata, bids and eligibility;
+normal catalog edits change it. Invalid eligible topics abort the build. This offline
+fingerprint scan does not implement request-time catalog change detection; ticket 13
+owns freshness integration and exact-current-inventory fallback.
+
+Each version contains `index.faiss`, `ids.json` (sorted positive int64 database IDs paired
+with sequential FAISS rows), and `manifest.json`. The manifest records schema/builder and
+snapshot versions, dataset/catalog identity, vector/vocabulary versions/order, dimension,
+metric/dtype, count, native build thread count, runtime/library/build identity, and SHA-256
+checksums. Build stages a sibling directory, validates a complete reload, then renames it
+into place. Failed writes never publish a partial output version.
+
+`load_snapshot(path)` reads each payload once, validates checksums before native decoding,
+checks complete schema/runtime/mapping/index agreement, and revalidates every stored vector
+in batches. It conservatively requires exact FAISS/NumPy/Python version, OS/architecture,
+byte order and native compile-option identity. Rebuild in the target runtime rather than
+copying Windows artifacts into Linux or relying on untested compatibility. Optional
+`expected_dataset_id` and `expected_catalog_version` reject mismatched/stale artifacts;
+CLI equivalents are `--dataset-id` and `--expected-catalog-version`. Without a current
+expected catalog version, standalone loading validates integrity, not catalog freshness.
+Checksums protect accidental corruption, not authenticity: use locally generated trusted
+artifacts. FAISS documents that its native reader does not validate arbitrary input in
+[index I/O guidance](https://github.com/facebookresearch/faiss/wiki/Index-IO%2C-cloning-and-hyper-parameter-tuning).
+
+`ActiveSnapshot.reload(path, ...)` performs all file/native work before taking a brief lock
+to replace its reference. `snapshot = active.acquire()` obtains a complete version/mapping
+pair; already acquired snapshots remain usable after reload. Public snapshots expose search
+and a frozen manifest, without live add/remove methods. Every worker must explicitly load
+the same complete version path; there is no automatic cross-process rollout. CLI `load`
+validates/loads only its own process and exits; it does not change a running API worker.
+The running API does not yet use this manager—ticket 15 owns serving integration.
+
+For N catalog ads and D=13 dimensions, export/vector preparation is O(N*D) work plus metadata
+hashing; sorting IDs is O(N log N). Flat stores O(N*D) float32 data plus IDs. Build/load hold
+serialized and native copies, with additional O(N*D) memory; validation scans every vector
+and uses batches of at most 1,000. Flat search scans stored vectors, with candidate
+selection/sorting overhead. These are algorithm costs, not benchmarks or a 100,000-ad claim.
+Normalized inner-product behavior follows [FAISS metric documentation](https://github.com/facebookresearch/faiss/wiki/MetricType-and-distances).
+
+Focused checks from `backend/` (PostgreSQL opt-in as above):
+
+```powershell
+uv run --locked pytest tests/unit/test_index_snapshots.py tests/unit/test_index_cli.py tests/integration/test_index_catalog.py
+uv run --locked mypy
+```
+
+Two sandboxed Windows pytest collections encountered intermittent native DLL initialization
+errors (`0xc0000008`). Fresh-process import/persistence probes and repeated focused runs
+outside that sandbox passed; native verification used the reviewed outside-sandbox path.
+No dependency change or application workaround is attributed to a proven root cause.
 
 ## Recommendation workflow
 
@@ -696,6 +798,7 @@ application-only deduplication; no throughput claim is made.
 | `backend/tests/integration/` | Opt-in PostgreSQL constraints, snapshots, rollback, and wait limits |
 | `backend/app/seeding/` | Versioned entity generator, atomic append/no-op persistence, seed CLI |
 | `backend/app/core/topics.py` and `backend/app/retrieval/` | Shared ordered vocabulary, normalized membership vectors, validated candidate-retrieval contracts and limits |
+| `backend/app/db/catalog.py` and `backend/app/retrieval/snapshots.py`, `cli.py` | Offline eligible catalog export, immutable exact FAISS artifacts, validated process-local reload and explicit CLI |
 | `backend/app/ranking/` and `backend/app/db/selection.py` | Pure deterministic baseline and streamed eligible-inventory reader |
 | `backend/app/services/recommendations.py` and `backend/app/core/errors.py` | Atomic recommendation/no-ad opportunities, durable replay and safe workflow failures |
 | `backend/app/services/events.py` and `backend/app/core/clock.py` | Idempotent client events, captured-bid credit and shared server UTC clock |

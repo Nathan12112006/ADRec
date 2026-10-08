@@ -15,6 +15,8 @@ COPY --from=dependencies /app/.venv /app/.venv
 COPY app ./app
 COPY migrations ./migrations
 COPY alembic.ini ./
+# Named volumes inherit this directory's ownership for explicit offline preparation.
+RUN mkdir /artifacts && chown 10001:10001 /artifacts
 USER 10001:10001
 EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=10s --start-period=10s --retries=5 \
