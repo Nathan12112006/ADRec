@@ -239,6 +239,68 @@ Database selector fixtures temporarily hide existing ads and add edge inventory 
 rollback-only test transactions. They never commit those edits or clear history. Use
 the dedicated test database and run this suite serially, as with the other integration checks.
 
+## Recommendation workflow
+
+`app.services.recommendations.recommend(session, user_id, request_key)` implements
+recommendation creation and replay. Use a fresh session from `database.session()`;
+the service owns its transaction and commits before returning a `RecommendationResult`.
+It returns the saved ID, creation time, user and immutable `AdSelection`, or a result
+with both recommendation ID and selection `None` for no ad. Selection does not create
+an impression. HTTP routes and event workflows are later tickets 07 and 06.
+
+Request keys contain 1–255 characters and cannot be blank. Keys are preserved exactly
+and are globally unique. Within 24 hours, the same key/user returns its saved selection
+or no-ad outcome without reranking, even after inventory/profile edits. Another user
+gets `WorkflowError` with status 409; ownership is checked before expiry. At or after
+creation plus 24 hours, reuse returns 410 and requires a fresh key. Unknown users get
+404. Invalid keys get 422. Required database reads, writes, commit errors and pool/lock
+timeouts get a safe 503; API adapters will translate these workflow statuses in ticket 07.
+
+The service scans only ads in the user's dataset, respecting the existing composite
+foreign keys that prevent cross-dataset recommendations. The inventory reader accepts
+an optional `dataset_id`; its original unrestricted selector interface remains available.
+The user profile is share-locked for a new decision. After selection, the service
+share-locks the chosen ad and advertiser, rechecks activity, bid and target interests,
+then snapshots the locked payload and distinct overlap score together. A changed winner
+restarts the transaction/scan, up to three attempts; sustained changes yield retryable
+503. Other ads may change during a scan; this is coherent winner revalidation, not a
+serializable snapshot of all inventory.
+
+Selected ad payloads include decimal bid (stored as a JSON string), overlap score and
+meaning, strategy `interest-overlap`, version `baseline-v1` and null predicted CTR.
+The recommendation bid column and JSON snapshot come from the same decision, with one
+server UTC creation time shared by the recommendation and key. Replay reads this
+durable payload, never the current ad. The optional callable `clock` is a server-side
+test seam; clients cannot supply timestamps. Replay expiry uses receipt time captured
+once on entering the service, including uniqueness recovery.
+
+PostgreSQL request-key uniqueness is the concurrency authority. A losing insert rolls
+back the entire transaction, including any newly inserted recommendation, before reading
+the winner in a new transaction. Only the request-key primary-key violation is treated
+as a replay race; other database failures become 503. A response lost after commit is
+safe to retry with the same key. No history cleanup or key recycling is performed.
+
+New decisions retain the baseline scan costs and add indexed user/key/snapshot lookups,
+bounded revalidation and two inserts (one for no-ad). Replays use indexed durable
+lookups and no inventory scan. History grows with opportunities; no performance claim
+is made. Row locks can delay inventory editors; configured lock/statement timeouts bound
+database waits, not an end-to-end request deadline. This follows
+[SQLAlchemy transaction contexts](https://docs.sqlalchemy.org/en/20/orm/session_transaction.html)
+and [PostgreSQL row locks](https://www.postgresql.org/docs/18/explicit-locking.html).
+
+With the isolated test database configured, focused verification from `backend/`:
+
+```powershell
+$env:ADFLOW_RUN_POSTGRES_TESTS = "1"
+uv run --locked pytest tests/integration/test_recommendations.py
+Remove-Item Env:ADFLOW_RUN_POSTGRES_TESTS
+```
+
+These tests append unique fixtures to the dedicated test database. They coordinate real
+concurrent requests and inventory edits, and create temporary test-only triggers to
+reject inserts or commits; those triggers are removed in `finally` blocks. No database
+reset or durable-history deletion occurs. Run integration checks serially.
+
 ## Persistence contract
 
 `datasets` records identity, seed, generator version and JSON configuration. Users,
@@ -289,6 +351,7 @@ application-only deduplication; no throughput claim is made.
 | `backend/tests/integration/` | Opt-in PostgreSQL constraints, snapshots, rollback, and wait limits |
 | `backend/app/seeding/` | Versioned entity generator, atomic append/no-op persistence, seed CLI |
 | `backend/app/ranking/` and `backend/app/db/selection.py` | Pure deterministic baseline and streamed eligible-inventory reader |
+| `backend/app/services/recommendations.py` and `backend/app/core/errors.py` | Atomic recommendation/no-ad opportunities, durable replay and safe workflow failures |
 | `backend/tests/unit/test_seed_generation.py` and `test_seed_cli.py` | Reproducibility, stream independence, validation and CLI checks |
 | `backend/pyproject.toml` | Package, dependency ranges, pytest, Ruff, strict mypy configuration |
 | `backend/uv.lock` | Reproducible resolved dependency versions |

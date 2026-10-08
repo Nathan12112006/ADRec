@@ -1,12 +1,12 @@
 # 05 — Persist recommendations and idempotent request outcomes
 
 Status: ready-for-agent
-State: open
+State: active
 Type: task
 Kind: implementation
 Phase: 1 — Core backend
 Parent: [AdFlow implementation backlog](../spec.md)
-Assignee: unassigned
+Assignee: Codex
 Blocked by: 02, 04
 
 ## Scope
