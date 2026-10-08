@@ -1,0 +1,292 @@
+{
+  "empty_interests": [
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 7653497434213940,
+      "interests": []
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 15589057389679898,
+      "interests": []
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 17175991773096865,
+      "interests": []
+    }
+  ],
+  "personalized": [
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 3447223662544048721,
+      "interests": [
+        "fashion"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 4444533572394763677,
+      "interests": [
+        "technology"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 7102974568933185355,
+      "interests": [
+        "education",
+        "travel",
+        "music",
+        "cars",
+        "movies"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 6444296668983169436,
+      "interests": [
+        "travel"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 7705365449514429893,
+      "interests": [
+        "food"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 7904152739404584163,
+      "interests": [
+        "fashion",
+        "technology"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 7352934901207374964,
+      "interests": [
+        "cars",
+        "food",
+        "finance",
+        "gaming",
+        "fitness"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 2733637184911985177,
+      "interests": [
+        "fashion"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 6631269304867373765,
+      "interests": [
+        "gaming",
+        "food",
+        "sports",
+        "technology",
+        "fitness"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 4623736966273689330,
+      "interests": [
+        "fashion",
+        "education",
+        "technology"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 7795829508555985448,
+      "interests": [
+        "technology",
+        "gaming",
+        "fitness",
+        "photography",
+        "food"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 1476621539714423808,
+      "interests": [
+        "fitness",
+        "fashion",
+        "photography"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 9105470973054710981,
+      "interests": [
+        "cars",
+        "movies"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 1664948407452594878,
+      "interests": [
+        "photography",
+        "movies",
+        "fitness",
+        "food",
+        "technology"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 2481733554593102333,
+      "interests": [
+        "gaming",
+        "finance",
+        "travel",
+        "fitness",
+        "movies"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 3581039623651527485,
+      "interests": [
+        "food",
+        "fashion",
+        "gaming",
+        "movies"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 7416407684831933042,
+      "interests": [
+        "travel",
+        "cars",
+        "food",
+        "movies"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 4756740487461844678,
+      "interests": [
+        "music",
+        "fitness",
+        "sports"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 2686332507704537730,
+      "interests": [
+        "food",
+        "travel",
+        "education",
+        "technology",
+        "music"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 1033744169444846856,
+      "interests": [
+        "fashion",
+        "travel",
+        "movies",
+        "finance",
+        "gaming"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 7393155168068411355,
+      "interests": [
+        "gaming",
+        "sports"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 4659349737784661636,
+      "interests": [
+        "travel"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 4686804928822231996,
+      "interests": [
+        "travel",
+        "gaming"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 2350898886071110619,
+      "interests": [
+        "fashion",
+        "music",
+        "travel",
+        "food"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 5529476723727089574,
+      "interests": [
+        "travel"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 2686611597186246339,
+      "interests": [
+        "food"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 8802848745311580100,
+      "interests": [
+        "cars",
+        "music",
+        "education"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 1550960418487344378,
+      "interests": [
+        "sports",
+        "cars",
+        "technology",
+        "food"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 4200834114547731306,
+      "interests": [
+        "photography",
+        "movies",
+        "technology",
+        "education"
+      ]
+    },
+    {
+      "dataset_id": "caef4b11-279d-57b3-a015-01e0027f1370",
+      "id": 3895540533957401607,
+      "interests": [
+        "sports",
+        "music",
+        "gaming"
+      ]
+    }
+  ]
+}

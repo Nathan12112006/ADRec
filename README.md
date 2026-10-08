@@ -10,7 +10,7 @@ Docker and local startup, lifecycle replay/count reconciliation, database-outage
 behavior, and 186 unit/PostgreSQL tests. See [ticket 10's commands and evidence](.scratch/adflow-implementation/issues/10-phase-one-gate.md).
 Phase 2 topic vectors, CPU Flat/HNSW snapshots and current-inventory candidate
 retrieval with marked fallback and bounded recommendation serving are available. CTR modeling,
-experiments, Redis, dashboards and performance benchmarks remain planned work.
+experiments, Redis, dashboards and HTTP load tests remain planned work.
 The separate [lifecycle learning checkpoint](.scratch/adflow-implementation/issues/57-learning-lifecycle.md)
 remains open; passing software checks does not certify human understanding.
 

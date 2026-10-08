@@ -1,0 +1,2293 @@
+{
+  "config": {
+    "boundary_tolerance": 1e-06,
+    "candidate_limit": 500,
+    "empty_query_count": 3,
+    "hnsw": {
+      "ef_construction": 200,
+      "ef_search": 128,
+      "m": 32
+    },
+    "query_count": 20,
+    "query_seed": 1601,
+    "repetitions": 3,
+    "threads": 1,
+    "warmup_queries": 5
+  },
+  "finished_at": "2026-10-08T19:23:31.144868+00:00",
+  "indexes": {
+    "flat": {
+      "artifact_bytes": 74048,
+      "build_ms": 63.875499996356666,
+      "index_bytes": 52045,
+      "manifest": {
+        "build_threads": 1,
+        "builder_version": "cpu-snapshot-v2",
+        "catalog_version": "catalog-v2:339aa2ad-bd42-582c-9df9-2bd21d1f97d6:1020",
+        "count": 1000,
+        "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+        "dimension": 13,
+        "dtype": "float32",
+        "hnsw": null,
+        "index_sha256": "1f3f782912a6d5fac2a8b4ac467a6c0d315d455236ff62c774756611dba959ff",
+        "index_type": "IndexFlatIP",
+        "mapping_sha256": "5bd136adbf95f3be9fa180cec1ff45d0ceb000e23162dd2088fe6c8b2ec59099",
+        "metric": "inner_product",
+        "runtime": {
+          "byteorder": "little",
+          "faiss_build": "",
+          "faiss_version": "1.15.1",
+          "machine": "AMD64",
+          "numpy_version": "2.2.6",
+          "python_version": "3.10.11",
+          "system": "Windows"
+        },
+        "schema_version": 2,
+        "snapshot_version": "3cf9e859-587a-48f0-a84e-8856c80b9505",
+        "topics": [
+          "technology",
+          "gaming",
+          "fitness",
+          "travel",
+          "food",
+          "fashion",
+          "sports",
+          "finance",
+          "education",
+          "music",
+          "movies",
+          "photography",
+          "cars"
+        ],
+        "vector_version": "binary-cosine-v1",
+        "vocabulary_version": "topics-v1"
+      },
+      "process_memory": {
+        "peak_rss_bytes": 83316736,
+        "rss_bytes": 83222528,
+        "source": "Windows process working set (cumulative peak)"
+      },
+      "reload_ms": 11.812399956397712
+    },
+    "hnsw": {
+      "artifact_bytes": 345754,
+      "build_ms": 164.9617999792099,
+      "index_bytes": 323682,
+      "manifest": {
+        "build_threads": 1,
+        "builder_version": "cpu-snapshot-v2",
+        "catalog_version": "catalog-v2:339aa2ad-bd42-582c-9df9-2bd21d1f97d6:1020",
+        "count": 1000,
+        "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+        "dimension": 13,
+        "dtype": "float32",
+        "hnsw": {
+          "ef_construction": 200,
+          "ef_search": 128,
+          "m": 32
+        },
+        "index_sha256": "df2e5271acbc7270d89925c68360e7ab31592cb57b2b6f864feb2e0a2edc5d99",
+        "index_type": "IndexHNSWFlat",
+        "mapping_sha256": "5bd136adbf95f3be9fa180cec1ff45d0ceb000e23162dd2088fe6c8b2ec59099",
+        "metric": "inner_product",
+        "runtime": {
+          "byteorder": "little",
+          "faiss_build": "",
+          "faiss_version": "1.15.1",
+          "machine": "AMD64",
+          "numpy_version": "2.2.6",
+          "python_version": "3.10.11",
+          "system": "Windows"
+        },
+        "schema_version": 2,
+        "snapshot_version": "88d99a0f-6891-4469-ad0c-f3a4f8bd8188",
+        "topics": [
+          "technology",
+          "gaming",
+          "fitness",
+          "travel",
+          "food",
+          "fashion",
+          "sports",
+          "finance",
+          "education",
+          "music",
+          "movies",
+          "photography",
+          "cars"
+        ],
+        "vector_version": "binary-cosine-v1",
+        "vocabulary_version": "topics-v1"
+      },
+      "process_memory": {
+        "peak_rss_bytes": 84963328,
+        "rss_bytes": 84619264,
+        "source": "Windows process working set (cumulative peak)"
+      },
+      "reload_ms": 13.368300045840442
+    }
+  },
+  "measurement_started_at": "2026-10-08T19:23:18.204131+00:00",
+  "promotion": {
+    "applied": false,
+    "eligible": false,
+    "flat_retrieval_p95_ms": 88.55849993415177,
+    "hnsw_retrieval_p95_ms": 217.47049991972744,
+    "minimum_tie_aware_recall": 0.986,
+    "reason": "gate not met; retain Flat",
+    "requirements": "3 repetitions; lower full-retrieval P95; min recall >= 0.95; no fallback",
+    "serving_default": "flat"
+  },
+  "provenance": {
+    "actual_empty_queries": 3,
+    "actual_personalized_queries": 20,
+    "catalog_content_sha256": "f5cff0d59312a2da0a3489f8d2dcd95a591dff04781dd21da3c0268be9009df7",
+    "catalog_sha256": "0fce7ce51a26b6f8970c13a4d235818f5f4b41d3ac237988e6bc60b2c3ad9bbd",
+    "catalog_version": "catalog-v2:339aa2ad-bd42-582c-9df9-2bd21d1f97d6:1020",
+    "code_identity": {
+      "git_revision": "29c0a0b20b8851473b03dda08f24deac3eba6912",
+      "source_sha256": {
+        "benchmark.py": "12cb24693a7bb87e234bfd2a4b2d01efc17d7b7c96cb41c74c2b9ce8935a1293",
+        "benchmark_cli.py": "c357f919b1c632ec74d4bfb30353b9162bed1f2a8de01e57d48ad2a935cb88f5",
+        "evaluation.py": "0e10776806e002c4dd27f58dec9d31d9bf15550c168dd0aee2144dcb672d08e7"
+      }
+    },
+    "concurrency": 1,
+    "counts": {
+      "ads": 1000,
+      "advertisers": 20,
+      "users": 100
+    },
+    "database_location": {
+      "database": "adflow_ticket16_benchmark",
+      "host": "127.0.0.1",
+      "port": 5432
+    },
+    "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+    "dataset_manifest": {
+      "active_percent": 100,
+      "ads": 1000,
+      "advertisers": 20,
+      "age_groups": [
+        "18-24",
+        "25-34",
+        "35-44",
+        "45-54",
+        "55+"
+      ],
+      "bid_cents": [
+        25,
+        500
+      ],
+      "category_interests": {
+        "cars": [
+          "cars",
+          "technology"
+        ],
+        "education": [
+          "education"
+        ],
+        "fashion": [
+          "fashion"
+        ],
+        "finance": [
+          "finance"
+        ],
+        "fitness": [
+          "fitness",
+          "sports"
+        ],
+        "food": [
+          "food"
+        ],
+        "gaming": [
+          "gaming",
+          "technology"
+        ],
+        "movies": [
+          "movies"
+        ],
+        "music": [
+          "music"
+        ],
+        "photography": [
+          "photography"
+        ],
+        "sports": [
+          "sports",
+          "fitness"
+        ],
+        "technology": [
+          "technology",
+          "gaming",
+          "photography"
+        ],
+        "travel": [
+          "travel",
+          "photography",
+          "food"
+        ]
+      },
+      "category_preference_count": [
+        1,
+        3
+      ],
+      "countries": [
+        "US",
+        "CA",
+        "GB",
+        "DE",
+        "AU"
+      ],
+      "devices": [
+        "mobile",
+        "desktop",
+        "tablet"
+      ],
+      "generator_version": "entities-v1",
+      "historical_clicks": 0,
+      "historical_impressions": 0,
+      "python_version": "3.10.11",
+      "sampling": "uniform; independent users/advertisers/ads random streams",
+      "seed": 160017,
+      "simulated_time_range": null,
+      "split_definitions": null,
+      "topics": [
+        "technology",
+        "gaming",
+        "fitness",
+        "travel",
+        "food",
+        "fashion",
+        "sports",
+        "finance",
+        "education",
+        "music",
+        "movies",
+        "photography",
+        "cars"
+      ],
+      "user_interest_count": [
+        1,
+        5
+      ],
+      "users": 100
+    },
+    "dataset_seed": 160017,
+    "eligible_ads": 1000,
+    "freeze": "repeatable-read transaction with shared catalog revision lock; local idle timeout disabled during offline work",
+    "generator_version": "entities-v1",
+    "hardware": {
+      "machine": "AMD64",
+      "node": "TX16PRO",
+      "processor": "AMD64 Family 23 Model 104 Stepping 1, AuthenticAMD",
+      "release": "10",
+      "system": "Windows",
+      "version": "10.0.26200"
+    },
+    "logical_cpus": 16,
+    "measurement_process_cpu_seconds": 9.828125,
+    "memory_after_measurement": {
+      "peak_rss_bytes": 95555584,
+      "rss_bytes": 95461376,
+      "source": "Windows process working set (cumulative peak)"
+    },
+    "memory_before_build": {
+      "peak_rss_bytes": 82612224,
+      "rss_bytes": 82599936,
+      "source": "Windows process working set (cumulative peak)"
+    },
+    "percentiles": "nearest rank from raw samples; never mean of percentiles",
+    "postgres_version": "PostgreSQL 18.6 on x86_64-windows, compiled by msvc-19.44.35229, 64-bit",
+    "processor": "AMD64 Family 23 Model 104 Stepping 1, AuthenticAMD",
+    "quality_aggregation": "query/repetition distribution; gate: minimum >= 0.95",
+    "query_policy": "seeded nonempty profile sample without replacement; not used in index builds; empty-interest clones separate",
+    "query_sha256": "f96d39d91dac52b319a551987e58adf98e1904812e3e6ab682e6e1533eb86005",
+    "ranking_strategy": "interest-overlap/baseline-v1",
+    "runtime": {
+      "byteorder": "little",
+      "faiss_build": "",
+      "faiss_version": "1.15.1",
+      "machine": "AMD64",
+      "numpy_version": "2.2.6",
+      "python_version": "3.10.11",
+      "system": "Windows"
+    }
+  },
+  "raw_report_sha256": "2d7d843e8079c570ece53bfd8da87d280243f48c751ecefc9cf6ddbb98483c96",
+  "repetitions": {
+    "1": {
+      "empty_interests": {
+        "flat": {
+          "component_operations_per_second": 15.523675672373102,
+          "count": 3,
+          "fallback_rate": 1.0,
+          "missed_superior_count": 0,
+          "ordinary_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "tie_aware_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "timings_ms": {
+            "component_total_ms": {
+              "count": 3,
+              "max": 65.17640000674874,
+              "mean": 64.41773334518075,
+              "min": 63.62479995004833,
+              "p50": 64.45200007874519,
+              "p95": 65.17640000674874,
+              "p99": 65.17640000674874
+            },
+            "fallback_ms": {
+              "count": 3,
+              "max": 55.89449999388307,
+              "mean": 53.85009998766085,
+              "min": 50.70619995240122,
+              "p50": 54.94960001669824,
+              "p95": 55.89449999388307,
+              "p99": 55.89449999388307
+            },
+            "metadata_ms": {
+              "count": 3,
+              "max": 2.96770001295954,
+              "mean": 2.3557666378716626,
+              "min": 1.5628999099135399,
+              "p50": 2.5366999907419086,
+              "p95": 2.96770001295954,
+              "p99": 2.96770001295954
+            },
+            "ranking_ms": {
+              "count": 3,
+              "max": 0.5423999391496181,
+              "mean": 0.4206666490063071,
+              "min": 0.3496999852359295,
+              "p50": 0.36990002263337374,
+              "p95": 0.5423999391496181,
+              "p99": 0.5423999391496181
+            },
+            "retrieval_ms": {
+              "count": 3,
+              "max": 58.86220000684261,
+              "mean": 56.20586662553251,
+              "min": 53.24289994314313,
+              "p50": 56.51249992661178,
+              "p95": 58.86220000684261,
+              "p99": 58.86220000684261
+            },
+            "vector_ms": {
+              "count": 3,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0
+            }
+          },
+          "winner_disagreements_with_full_ad": 0
+        },
+        "full_ad": {
+          "component_operations_per_second": 67.33145266470865,
+          "count": 3,
+          "fallback_rate": 0.0,
+          "missed_superior_count": 0,
+          "ordinary_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "tie_aware_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "timings_ms": {
+            "component_total_ms": {
+              "count": 3,
+              "max": 16.06359996367246,
+              "mean": 14.851899972806374,
+              "min": 12.545599951408803,
+              "p50": 15.94650000333786,
+              "p95": 16.06359996367246,
+              "p99": 16.06359996367246
+            },
+            "fallback_ms": {
+              "count": 3,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0
+            },
+            "metadata_ms": {
+              "count": 3,
+              "max": 15.087299980223179,
+              "mean": 13.940199976786971,
+              "min": 11.73559995368123,
+              "p50": 14.997699996456504,
+              "p95": 15.087299980223179,
+              "p99": 15.087299980223179
+            },
+            "ranking_ms": {
+              "count": 3,
+              "max": 1.060499926097691,
+              "mean": 0.9070666662106911,
+              "min": 0.8054000791162252,
+              "p50": 0.8552999934181571,
+              "p95": 1.060499926097691,
+              "p99": 1.060499926097691
+            },
+            "retrieval_ms": {
+              "count": 3,
+              "max": 15.087299980223179,
+              "mean": 13.940199976786971,
+              "min": 11.73559995368123,
+              "p50": 14.997699996456504,
+              "p95": 15.087299980223179,
+              "p99": 15.087299980223179
+            },
+            "vector_ms": {
+              "count": 3,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0
+            }
+          },
+          "winner_disagreements_with_full_ad": 0
+        },
+        "hnsw": {
+          "component_operations_per_second": 11.494464265117172,
+          "count": 3,
+          "fallback_rate": 1.0,
+          "missed_superior_count": 0,
+          "ordinary_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "tie_aware_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "timings_ms": {
+            "component_total_ms": {
+              "count": 3,
+              "max": 132.05240003298968,
+              "mean": 86.9984000067537,
+              "min": 62.28650000412017,
+              "p50": 66.65629998315126,
+              "p95": 132.05240003298968,
+              "p99": 132.05240003298968
+            },
+            "fallback_ms": {
+              "count": 3,
+              "max": 57.461900054477155,
+              "mean": 51.79926667672893,
+              "min": 46.207700041122735,
+              "p50": 51.72819993458688,
+              "p95": 57.461900054477155,
+              "p99": 57.461900054477155
+            },
+            "metadata_ms": {
+              "count": 3,
+              "max": 2.672600094228983,
+              "mean": 2.5382333357507982,
+              "min": 2.3887999122962356,
+              "p50": 2.5533000007271767,
+              "p95": 2.672600094228983,
+              "p99": 2.672600094228983
+            },
+            "ranking_ms": {
+              "count": 3,
+              "max": 0.7170999888330698,
+              "mean": 0.5324000182251135,
+              "min": 0.36179996095597744,
+              "p50": 0.5183001048862934,
+              "p95": 0.7170999888330698,
+              "p99": 0.7170999888330698
+            },
+            "retrieval_ms": {
+              "count": 3,
+              "max": 60.01520005520433,
+              "mean": 54.33750001247972,
+              "min": 48.59649995341897,
+              "p50": 54.400800028815866,
+              "p95": 60.01520005520433,
+              "p99": 60.01520005520433
+            },
+            "vector_ms": {
+              "count": 3,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0
+            }
+          },
+          "winner_disagreements_with_full_ad": 0
+        }
+      },
+      "personalized": {
+        "flat": {
+          "component_operations_per_second": 26.70287934191003,
+          "count": 20,
+          "fallback_rate": 0.0,
+          "missed_superior_count": 0,
+          "ordinary_recall": {
+            "count": 20,
+            "max": 1.0,
+            "mean": 1.0,
+            "min": 1.0,
+            "p50": 1.0,
+            "p95": 1.0,
+            "p99": 1.0
+          },
+          "tie_aware_recall": {
+            "count": 20,
+            "max": 1.0,
+            "mean": 1.0,
+            "min": 1.0,
+            "p50": 1.0,
+            "p95": 1.0,
+            "p99": 1.0
+          },
+          "timings_ms": {
+            "component_total_ms": {
+              "count": 20,
+              "max": 95.88489995803684,
+              "mean": 37.44914498529397,
+              "min": 29.051000019535422,
+              "p50": 34.35849992092699,
+              "p95": 40.83479999098927,
+              "p99": 95.88489995803684
+            },
+            "fallback_ms": {
+              "count": 20,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0
+            },
+            "metadata_ms": {
+              "count": 20,
+              "max": 87.71089999936521,
+              "mean": 28.897024982143193,
+              "min": 20.745099987834692,
+              "p50": 25.643100030720234,
+              "p95": 31.338399974629283,
+              "p99": 87.71089999936521
+            },
+            "ranking_ms": {
+              "count": 20,
+              "max": 0.9527000365778804,
+              "mean": 0.5329000006895512,
+              "min": 0.35550002939999104,
+              "p50": 0.4656000528484583,
+              "p95": 0.8929000468924642,
+              "p99": 0.9527000365778804
+            },
+            "retrieval_ms": {
+              "count": 20,
+              "max": 88.55849993415177,
+              "mean": 30.235919990809634,
+              "min": 22.015499998815358,
+              "p50": 27.09969994612038,
+              "p95": 32.77609997894615,
+              "p99": 88.55849993415177
+            },
+            "vector_ms": {
+              "count": 20,
+              "max": 1.9422000041231513,
+              "mean": 1.3388950086664408,
+              "min": 0.838999985717237,
+              "p50": 1.3176000211387873,
+              "p95": 1.6951999859884381,
+              "p99": 1.9422000041231513
+            }
+          },
+          "winner_disagreements_with_full_ad": 0
+        },
+        "full_ad": {
+          "component_operations_per_second": 41.78531956683948,
+          "count": 20,
+          "fallback_rate": 0.0,
+          "missed_superior_count": 0,
+          "ordinary_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "tie_aware_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "timings_ms": {
+            "component_total_ms": {
+              "count": 20,
+              "max": 106.3884999603033,
+              "mean": 23.931849998189136,
+              "min": 12.507500010542572,
+              "p50": 15.871800016611814,
+              "p95": 71.92880008369684,
+              "p99": 106.3884999603033
+            },
+            "fallback_ms": {
+              "count": 20,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0
+            },
+            "metadata_ms": {
+              "count": 20,
+              "max": 104.75409997161478,
+              "mean": 22.514634992694482,
+              "min": 11.347100022248924,
+              "p50": 14.481400023214519,
+              "p95": 70.7708999980241,
+              "p99": 104.75409997161478
+            },
+            "ranking_ms": {
+              "count": 20,
+              "max": 2.731800079345703,
+              "mean": 1.4040099980775267,
+              "min": 0.7826000219210982,
+              "p50": 1.2863000156357884,
+              "p95": 2.2137999767437577,
+              "p99": 2.731800079345703
+            },
+            "retrieval_ms": {
+              "count": 20,
+              "max": 104.75409997161478,
+              "mean": 22.514634992694482,
+              "min": 11.347100022248924,
+              "p50": 14.481400023214519,
+              "p95": 70.7708999980241,
+              "p99": 104.75409997161478
+            },
+            "vector_ms": {
+              "count": 20,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0
+            }
+          },
+          "winner_disagreements_with_full_ad": 0
+        },
+        "hnsw": {
+          "component_operations_per_second": 8.753410219758994,
+          "count": 20,
+          "fallback_rate": 0.9,
+          "missed_superior_count": 7,
+          "ordinary_recall": {
+            "count": 20,
+            "max": 0.952,
+            "mean": 0.8375999999999999,
+            "min": 0.56,
+            "p50": 0.884,
+            "p95": 0.936,
+            "p99": 0.952
+          },
+          "tie_aware_recall": {
+            "count": 20,
+            "max": 1.0,
+            "mean": 0.9993000000000001,
+            "min": 0.986,
+            "p50": 1.0,
+            "p95": 1.0,
+            "p99": 1.0
+          },
+          "timings_ms": {
+            "component_total_ms": {
+              "count": 20,
+              "max": 138.9435000019148,
+              "mean": 114.24118999275379,
+              "min": 32.24130009766668,
+              "p50": 114.40620000939816,
+              "p95": 138.18530004937202,
+              "p99": 138.9435000019148
+            },
+            "fallback_ms": {
+              "count": 20,
+              "max": 107.37059998791665,
+              "mean": 78.15832499763928,
+              "min": 0.0,
+              "p50": 84.0966000687331,
+              "p95": 95.87900002952665,
+              "p99": 107.37059998791665
+            },
+            "metadata_ms": {
+              "count": 20,
+              "max": 107.54489991813898,
+              "mean": 26.40573497628793,
+              "min": 14.429499977268279,
+              "p50": 21.03709999937564,
+              "p95": 42.76899993419647,
+              "p99": 107.54489991813898
+            },
+            "ranking_ms": {
+              "count": 20,
+              "max": 1.0080999927595258,
+              "mean": 0.5411099875345826,
+              "min": 0.3334999782964587,
+              "p50": 0.4685999592766166,
+              "p95": 0.8809999562799931,
+              "p99": 1.0080999927595258
+            },
+            "retrieval_ms": {
+              "count": 20,
+              "max": 131.0059999814257,
+              "mean": 106.3285349868238,
+              "min": 25.99780005402863,
+              "p50": 107.00199997518212,
+              "p95": 130.86659996770322,
+              "p99": 131.0059999814257
+            },
+            "vector_ms": {
+              "count": 20,
+              "max": 4.3614000314846635,
+              "mean": 1.7644750128965825,
+              "min": 1.1650000233203173,
+              "p50": 1.6288000624626875,
+              "p95": 2.4083000607788563,
+              "p99": 4.3614000314846635
+            }
+          },
+          "winner_disagreements_with_full_ad": 0
+        }
+      }
+    },
+    "2": {
+      "empty_interests": {
+        "flat": {
+          "component_operations_per_second": 15.27326933001626,
+          "count": 3,
+          "fallback_rate": 1.0,
+          "missed_superior_count": 0,
+          "ordinary_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "tie_aware_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "timings_ms": {
+            "component_total_ms": {
+              "count": 3,
+              "max": 73.8234999589622,
+              "mean": 65.47386668777715,
+              "min": 60.68680004682392,
+              "p50": 61.911300057545304,
+              "p95": 73.8234999589622,
+              "p99": 73.8234999589622
+            },
+            "fallback_ms": {
+              "count": 3,
+              "max": 61.89130002167076,
+              "mean": 54.62163329745332,
+              "min": 49.53989991918206,
+              "p50": 52.43369995150715,
+              "p95": 61.89130002167076,
+              "p99": 61.89130002167076
+            },
+            "metadata_ms": {
+              "count": 3,
+              "max": 4.478999995626509,
+              "mean": 3.7833667205025754,
+              "min": 2.412400091998279,
+              "p50": 4.458700073882937,
+              "p95": 4.478999995626509,
+              "p99": 4.478999995626509
+            },
+            "ranking_ms": {
+              "count": 3,
+              "max": 0.507800024934113,
+              "mean": 0.4593666720514496,
+              "min": 0.4249999765306711,
+              "p50": 0.4453000146895647,
+              "p95": 0.507800024934113,
+              "p99": 0.507800024934113
+            },
+            "retrieval_ms": {
+              "count": 3,
+              "max": 66.3500000955537,
+              "mean": 58.4050000179559,
+              "min": 54.01889991480857,
+              "p50": 54.84610004350543,
+              "p95": 66.3500000955537,
+              "p99": 66.3500000955537
+            },
+            "vector_ms": {
+              "count": 3,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0
+            }
+          },
+          "winner_disagreements_with_full_ad": 0
+        },
+        "full_ad": {
+          "component_operations_per_second": 49.245396318214915,
+          "count": 3,
+          "fallback_rate": 0.0,
+          "missed_superior_count": 0,
+          "ordinary_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "tie_aware_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "timings_ms": {
+            "component_total_ms": {
+              "count": 3,
+              "max": 23.085599998012185,
+              "mean": 20.306466690575082,
+              "min": 17.037700046785176,
+              "p50": 20.79610002692789,
+              "p95": 23.085599998012185,
+              "p99": 23.085599998012185
+            },
+            "fallback_ms": {
+              "count": 3,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0
+            },
+            "metadata_ms": {
+              "count": 3,
+              "max": 20.904599921777844,
+              "mean": 18.78963333244125,
+              "min": 15.883099986240268,
+              "p50": 19.58120008930564,
+              "p95": 20.904599921777844,
+              "p99": 20.904599921777844
+            },
+            "ranking_ms": {
+              "count": 3,
+              "max": 2.1640999475494027,
+              "mean": 1.50473330480357,
+              "min": 1.1492000194266438,
+              "p50": 1.2008999474346638,
+              "p95": 2.1640999475494027,
+              "p99": 2.1640999475494027
+            },
+            "retrieval_ms": {
+              "count": 3,
+              "max": 20.904599921777844,
+              "mean": 18.78963333244125,
+              "min": 15.883099986240268,
+              "p50": 19.58120008930564,
+              "p95": 20.904599921777844,
+              "p99": 20.904599921777844
+            },
+            "vector_ms": {
+              "count": 3,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0
+            }
+          },
+          "winner_disagreements_with_full_ad": 0
+        },
+        "hnsw": {
+          "component_operations_per_second": 14.500648419972249,
+          "count": 3,
+          "fallback_rate": 1.0,
+          "missed_superior_count": 0,
+          "ordinary_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "tie_aware_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "timings_ms": {
+            "component_total_ms": {
+              "count": 3,
+              "max": 72.31810002122074,
+              "mean": 68.96243333661307,
+              "min": 63.37869993876666,
+              "p50": 71.19050004985183,
+              "p95": 72.31810002122074,
+              "p99": 72.31810002122074
+            },
+            "fallback_ms": {
+              "count": 3,
+              "max": 60.8189000049606,
+              "mean": 58.192400028929114,
+              "min": 53.43089997768402,
+              "p50": 60.327400104142725,
+              "p95": 60.8189000049606,
+              "p99": 60.8189000049606
+            },
+            "metadata_ms": {
+              "count": 3,
+              "max": 3.0763997929170728,
+              "mean": 2.51259992364794,
+              "min": 2.198000089265406,
+              "p50": 2.2633998887613416,
+              "p95": 3.0763997929170728,
+              "p99": 3.0763997929170728
+            },
+            "ranking_ms": {
+              "count": 3,
+              "max": 0.6491999374702573,
+              "mean": 0.5677999773373207,
+              "min": 0.47369999811053276,
+              "p50": 0.5804999964311719,
+              "p95": 0.6491999374702573,
+              "p99": 0.6491999374702573
+            },
+            "retrieval_ms": {
+              "count": 3,
+              "max": 63.4037998970598,
+              "mean": 60.704999952577055,
+              "min": 55.62890006694943,
+              "p50": 63.08229989372194,
+              "p95": 63.4037998970598,
+              "p99": 63.4037998970598
+            },
+            "vector_ms": {
+              "count": 3,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0
+            }
+          },
+          "winner_disagreements_with_full_ad": 0
+        }
+      },
+      "personalized": {
+        "flat": {
+          "component_operations_per_second": 21.45008126832197,
+          "count": 20,
+          "fallback_rate": 0.0,
+          "missed_superior_count": 0,
+          "ordinary_recall": {
+            "count": 20,
+            "max": 1.0,
+            "mean": 1.0,
+            "min": 1.0,
+            "p50": 1.0,
+            "p95": 1.0,
+            "p99": 1.0
+          },
+          "tie_aware_recall": {
+            "count": 20,
+            "max": 1.0,
+            "mean": 1.0,
+            "min": 1.0,
+            "p50": 1.0,
+            "p95": 1.0,
+            "p99": 1.0
+          },
+          "timings_ms": {
+            "component_total_ms": {
+              "count": 20,
+              "max": 108.7913999799639,
+              "mean": 46.61986998980865,
+              "min": 30.164600000716746,
+              "p50": 35.049299942329526,
+              "p95": 108.19629998877645,
+              "p99": 108.7913999799639
+            },
+            "fallback_ms": {
+              "count": 20,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0
+            },
+            "metadata_ms": {
+              "count": 20,
+              "max": 100.16640007961541,
+              "mean": 37.1444100048393,
+              "min": 22.150699980556965,
+              "p50": 26.394099928438663,
+              "p95": 99.9667999567464,
+              "p99": 100.16640007961541
+            },
+            "ranking_ms": {
+              "count": 20,
+              "max": 1.9885000074282289,
+              "mean": 0.6460099946707487,
+              "min": 0.3420999273657799,
+              "p50": 0.4556000931188464,
+              "p95": 1.8552999245002866,
+              "p99": 1.9885000074282289
+            },
+            "retrieval_ms": {
+              "count": 20,
+              "max": 101.49889998137951,
+              "mean": 38.46866998355836,
+              "min": 22.970199934206903,
+              "p50": 27.43629994802177,
+              "p95": 100.97529995255172,
+              "p99": 101.49889998137951
+            },
+            "vector_ms": {
+              "count": 20,
+              "max": 2.158199902623892,
+              "mean": 1.3242599787190557,
+              "min": 0.8194999536499381,
+              "p50": 1.3240000698715448,
+              "p95": 1.9644999410957098,
+              "p99": 2.158199902623892
+            }
+          },
+          "winner_disagreements_with_full_ad": 0
+        },
+        "full_ad": {
+          "component_operations_per_second": 60.65101588187292,
+          "count": 20,
+          "fallback_rate": 0.0,
+          "missed_superior_count": 0,
+          "ordinary_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "tie_aware_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "timings_ms": {
+            "component_total_ms": {
+              "count": 20,
+              "max": 25.24929994251579,
+              "mean": 16.487769997911528,
+              "min": 11.17010007146746,
+              "p50": 15.928399981930852,
+              "p95": 20.86970000527799,
+              "p99": 25.24929994251579
+            },
+            "fallback_ms": {
+              "count": 20,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0
+            },
+            "metadata_ms": {
+              "count": 20,
+              "max": 23.601599968969822,
+              "mean": 15.100129978964105,
+              "min": 10.339600034058094,
+              "p50": 14.449800015427172,
+              "p95": 18.913000007160008,
+              "p99": 23.601599968969822
+            },
+            "ranking_ms": {
+              "count": 20,
+              "max": 1.9391999812796712,
+              "mean": 1.379159971838817,
+              "min": 0.7929999846965075,
+              "p50": 1.3863000785931945,
+              "p95": 1.7801999347284436,
+              "p99": 1.9391999812796712
+            },
+            "retrieval_ms": {
+              "count": 20,
+              "max": 23.601599968969822,
+              "mean": 15.100129978964105,
+              "min": 10.339600034058094,
+              "p50": 14.449800015427172,
+              "p95": 18.913000007160008,
+              "p99": 23.601599968969822
+            },
+            "vector_ms": {
+              "count": 20,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0
+            }
+          },
+          "winner_disagreements_with_full_ad": 0
+        },
+        "hnsw": {
+          "component_operations_per_second": 8.605279527313634,
+          "count": 20,
+          "fallback_rate": 0.9,
+          "missed_superior_count": 7,
+          "ordinary_recall": {
+            "count": 20,
+            "max": 0.952,
+            "mean": 0.8375999999999999,
+            "min": 0.56,
+            "p50": 0.884,
+            "p95": 0.936,
+            "p99": 0.952
+          },
+          "tie_aware_recall": {
+            "count": 20,
+            "max": 1.0,
+            "mean": 0.9993000000000001,
+            "min": 0.986,
+            "p50": 1.0,
+            "p95": 1.0,
+            "p99": 1.0
+          },
+          "timings_ms": {
+            "component_total_ms": {
+              "count": 20,
+              "max": 228.1829999992624,
+              "mean": 116.20773001341149,
+              "min": 33.39350002352148,
+              "p50": 115.0417000753805,
+              "p95": 144.0859999274835,
+              "p99": 228.1829999992624
+            },
+            "fallback_ms": {
+              "count": 20,
+              "max": 186.44690001383424,
+              "mean": 82.4925200024154,
+              "min": 0.0,
+              "p50": 84.85750004183501,
+              "p95": 103.6346999462694,
+              "p99": 186.44690001383424
+            },
+            "metadata_ms": {
+              "count": 20,
+              "max": 47.96929995063692,
+              "mean": 23.6874149821233,
+              "min": 13.225700124166906,
+              "p50": 21.99140004813671,
+              "p95": 33.97709992714226,
+              "p99": 47.96929995063692
+            },
+            "ranking_ms": {
+              "count": 20,
+              "max": 1.2812999775633216,
+              "mean": 0.5628500075545162,
+              "min": 0.3264000406488776,
+              "p50": 0.47750002704560757,
+              "p95": 0.8854999905452132,
+              "p99": 1.2812999775633216
+            },
+            "retrieval_ms": {
+              "count": 20,
+              "max": 217.47049991972744,
+              "mean": 107.9063949873671,
+              "min": 25.8005999494344,
+              "p50": 108.04830002598464,
+              "p95": 135.60760009568185,
+              "p99": 217.47049991972744
+            },
+            "vector_ms": {
+              "count": 20,
+              "max": 3.35900008212775,
+              "mean": 1.7264600028283894,
+              "min": 1.2250000145286322,
+              "p50": 1.525399973616004,
+              "p95": 2.3910999298095703,
+              "p99": 3.35900008212775
+            }
+          },
+          "winner_disagreements_with_full_ad": 0
+        }
+      }
+    },
+    "3": {
+      "empty_interests": {
+        "flat": {
+          "component_operations_per_second": 16.946596180696744,
+          "count": 3,
+          "fallback_rate": 1.0,
+          "missed_superior_count": 0,
+          "ordinary_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "tie_aware_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "timings_ms": {
+            "component_total_ms": {
+              "count": 3,
+              "max": 60.744900023564696,
+              "mean": 59.00890003734579,
+              "min": 56.46700004581362,
+              "p50": 59.814800042659044,
+              "p95": 60.744900023564696,
+              "p99": 60.744900023564696
+            },
+            "fallback_ms": {
+              "count": 3,
+              "max": 51.791799953207374,
+              "mean": 49.8160666708524,
+              "min": 48.69280010461807,
+              "p50": 48.96359995473176,
+              "p95": 51.791799953207374,
+              "p99": 51.791799953207374
+            },
+            "metadata_ms": {
+              "count": 3,
+              "max": 1.8952999962493777,
+              "mean": 1.7903999347860615,
+              "min": 1.671399804763496,
+              "p50": 1.8045000033453107,
+              "p95": 1.8952999962493777,
+              "p99": 1.8952999962493777
+            },
+            "ranking_ms": {
+              "count": 3,
+              "max": 1.0812999680638313,
+              "mean": 0.5913666682317853,
+              "min": 0.32760004978626966,
+              "p50": 0.3651999868452549,
+              "p95": 1.0812999680638313,
+              "p99": 1.0812999680638313
+            },
+            "retrieval_ms": {
+              "count": 3,
+              "max": 53.68709994945675,
+              "mean": 51.60646660563847,
+              "min": 50.36419990938157,
+              "p50": 50.76809995807707,
+              "p95": 53.68709994945675,
+              "p99": 53.68709994945675
+            },
+            "vector_ms": {
+              "count": 3,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0
+            }
+          },
+          "winner_disagreements_with_full_ad": 0
+        },
+        "full_ad": {
+          "component_operations_per_second": 67.19105545858972,
+          "count": 3,
+          "fallback_rate": 0.0,
+          "missed_superior_count": 0,
+          "ordinary_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "tie_aware_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "timings_ms": {
+            "component_total_ms": {
+              "count": 3,
+              "max": 16.645000083371997,
+              "mean": 14.882933348417282,
+              "min": 11.589500005356967,
+              "p50": 16.414299956522882,
+              "p95": 16.645000083371997,
+              "p99": 16.645000083371997
+            },
+            "fallback_ms": {
+              "count": 3,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0
+            },
+            "metadata_ms": {
+              "count": 3,
+              "max": 15.55659994482994,
+              "mean": 13.953566667623818,
+              "min": 10.807999991811812,
+              "p50": 15.496100066229701,
+              "p95": 15.55659994482994,
+              "p99": 15.55659994482994
+            },
+            "ranking_ms": {
+              "count": 3,
+              "max": 1.1433999752625823,
+              "mean": 0.9243333479389548,
+              "min": 0.7778999861329794,
+              "p50": 0.8517000824213028,
+              "p95": 1.1433999752625823,
+              "p99": 1.1433999752625823
+            },
+            "retrieval_ms": {
+              "count": 3,
+              "max": 15.55659994482994,
+              "mean": 13.953566667623818,
+              "min": 10.807999991811812,
+              "p50": 15.496100066229701,
+              "p95": 15.55659994482994,
+              "p99": 15.55659994482994
+            },
+            "vector_ms": {
+              "count": 3,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0
+            }
+          },
+          "winner_disagreements_with_full_ad": 0
+        },
+        "hnsw": {
+          "component_operations_per_second": 16.143187912127896,
+          "count": 3,
+          "fallback_rate": 1.0,
+          "missed_superior_count": 0,
+          "ordinary_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "tie_aware_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "timings_ms": {
+            "component_total_ms": {
+              "count": 3,
+              "max": 66.81150000076741,
+              "mean": 61.945633380673826,
+              "min": 55.220500100404024,
+              "p50": 63.80490004085004,
+              "p95": 66.81150000076741,
+              "p99": 66.81150000076741
+            },
+            "fallback_ms": {
+              "count": 3,
+              "max": 57.396800024434924,
+              "mean": 52.09743332428237,
+              "min": 45.47779995482415,
+              "p50": 53.41769999358803,
+              "p95": 57.396800024434924,
+              "p99": 57.396800024434924
+            },
+            "metadata_ms": {
+              "count": 3,
+              "max": 3.6018999526277184,
+              "mean": 2.847066653581957,
+              "min": 2.4678000481799245,
+              "p50": 2.471499959938228,
+              "p95": 3.6018999526277184,
+              "p99": 3.6018999526277184
+            },
+            "ranking_ms": {
+              "count": 3,
+              "max": 0.5406000418588519,
+              "mean": 0.4743000414843361,
+              "min": 0.40550006087869406,
+              "p50": 0.4768000217154622,
+              "p95": 0.5406000418588519,
+              "p99": 0.5406000418588519
+            },
+            "retrieval_ms": {
+              "count": 3,
+              "max": 59.86829998437315,
+              "mean": 54.944499977864325,
+              "min": 47.945600003004074,
+              "p50": 57.01959994621575,
+              "p95": 59.86829998437315,
+              "p99": 59.86829998437315
+            },
+            "vector_ms": {
+              "count": 3,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0
+            }
+          },
+          "winner_disagreements_with_full_ad": 0
+        }
+      },
+      "personalized": {
+        "flat": {
+          "component_operations_per_second": 23.242927651201597,
+          "count": 20,
+          "fallback_rate": 0.0,
+          "missed_superior_count": 0,
+          "ordinary_recall": {
+            "count": 20,
+            "max": 1.0,
+            "mean": 1.0,
+            "min": 1.0,
+            "p50": 1.0,
+            "p95": 1.0,
+            "p99": 1.0
+          },
+          "tie_aware_recall": {
+            "count": 20,
+            "max": 1.0,
+            "mean": 1.0,
+            "min": 1.0,
+            "p50": 1.0,
+            "p95": 1.0,
+            "p99": 1.0
+          },
+          "timings_ms": {
+            "component_total_ms": {
+              "count": 20,
+              "max": 56.462799897417426,
+              "mean": 43.02383998292498,
+              "min": 32.408000086434186,
+              "p50": 42.67170000821352,
+              "p95": 54.34629996307194,
+              "p99": 56.462799897417426
+            },
+            "fallback_ms": {
+              "count": 20,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0
+            },
+            "metadata_ms": {
+              "count": 20,
+              "max": 44.210199965164065,
+              "mean": 32.36179003142752,
+              "min": 24.15309997741133,
+              "p50": 31.54909994918853,
+              "p95": 41.44520009867847,
+              "p99": 44.210199965164065
+            },
+            "ranking_ms": {
+              "count": 20,
+              "max": 1.2526999926194549,
+              "mean": 0.6233600084669888,
+              "min": 0.33549999352544546,
+              "p50": 0.5523000145331025,
+              "p95": 1.153700053691864,
+              "p99": 1.2526999926194549
+            },
+            "retrieval_ms": {
+              "count": 20,
+              "max": 45.97699991427362,
+              "mean": 33.921615016879514,
+              "min": 25.19309998024255,
+              "p50": 33.4024999756366,
+              "p95": 43.04490005597472,
+              "p99": 45.97699991427362
+            },
+            "vector_ms": {
+              "count": 20,
+              "max": 3.422299982048571,
+              "mean": 1.5598249854519963,
+              "min": 0.9881999576464295,
+              "p50": 1.4669999945908785,
+              "p95": 1.9136000191792846,
+              "p99": 3.422299982048571
+            }
+          },
+          "winner_disagreements_with_full_ad": 0
+        },
+        "full_ad": {
+          "component_operations_per_second": 50.828142918924414,
+          "count": 20,
+          "fallback_rate": 0.0,
+          "missed_superior_count": 0,
+          "ordinary_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "tie_aware_recall": {
+            "count": 0,
+            "max": null,
+            "mean": null,
+            "min": null,
+            "p50": null,
+            "p95": null,
+            "p99": null
+          },
+          "timings_ms": {
+            "component_total_ms": {
+              "count": 20,
+              "max": 28.593100025318563,
+              "mean": 19.674140005372465,
+              "min": 12.527300044894218,
+              "p50": 19.513800041750073,
+              "p95": 23.48209999036044,
+              "p99": 28.593100025318563
+            },
+            "fallback_ms": {
+              "count": 20,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0
+            },
+            "metadata_ms": {
+              "count": 20,
+              "max": 26.460199966095388,
+              "mean": 17.905804998008534,
+              "min": 11.386599973775446,
+              "p50": 17.431700020097196,
+              "p95": 21.535699954256415,
+              "p99": 26.460199966095388
+            },
+            "ranking_ms": {
+              "count": 20,
+              "max": 2.9415000462904572,
+              "mean": 1.7561200016643852,
+              "min": 0.90230000205338,
+              "p50": 1.675700070336461,
+              "p95": 2.897900063544512,
+              "p99": 2.9415000462904572
+            },
+            "retrieval_ms": {
+              "count": 20,
+              "max": 26.460199966095388,
+              "mean": 17.905804998008534,
+              "min": 11.386599973775446,
+              "p50": 17.431700020097196,
+              "p95": 21.535699954256415,
+              "p99": 26.460199966095388
+            },
+            "vector_ms": {
+              "count": 20,
+              "max": 0.0,
+              "mean": 0.0,
+              "min": 0.0,
+              "p50": 0.0,
+              "p95": 0.0,
+              "p99": 0.0
+            }
+          },
+          "winner_disagreements_with_full_ad": 0
+        },
+        "hnsw": {
+          "component_operations_per_second": 6.773899987307369,
+          "count": 20,
+          "fallback_rate": 0.9,
+          "missed_superior_count": 7,
+          "ordinary_recall": {
+            "count": 20,
+            "max": 0.952,
+            "mean": 0.8375999999999999,
+            "min": 0.56,
+            "p50": 0.884,
+            "p95": 0.936,
+            "p99": 0.952
+          },
+          "tie_aware_recall": {
+            "count": 20,
+            "max": 1.0,
+            "mean": 0.9993000000000001,
+            "min": 0.986,
+            "p50": 1.0,
+            "p95": 1.0,
+            "p99": 1.0
+          },
+          "timings_ms": {
+            "component_total_ms": {
+              "count": 20,
+              "max": 241.5396999567747,
+              "mean": 147.62544499826618,
+              "min": 42.02379996422678,
+              "p50": 139.3632999388501,
+              "p95": 233.25120005756617,
+              "p99": 241.5396999567747
+            },
+            "fallback_ms": {
+              "count": 20,
+              "max": 202.84229994285852,
+              "mean": 109.06879999674857,
+              "min": 0.0,
+              "p50": 98.3041999861598,
+              "p95": 199.01050010230392,
+              "p99": 202.84229994285852
+            },
+            "metadata_ms": {
+              "count": 20,
+              "max": 61.660900129936635,
+              "mean": 27.124684990849346,
+              "min": 16.16009999997914,
+              "p50": 24.888799991458654,
+              "p95": 31.925600138492882,
+              "p99": 61.660900129936635
+            },
+            "ranking_ms": {
+              "count": 20,
+              "max": 1.6118999337777495,
+              "mean": 0.7951100007630885,
+              "min": 0.34739996772259474,
+              "p50": 0.7385000353679061,
+              "p95": 1.2048999778926373,
+              "p99": 1.6118999337777495
+            },
+            "retrieval_ms": {
+              "count": 20,
+              "max": 229.0995999937877,
+              "mean": 138.23529998771846,
+              "min": 33.5112001048401,
+              "p50": 127.40959995426238,
+              "p95": 224.10130000207573,
+              "p99": 229.0995999937877
+            },
+            "vector_ms": {
+              "count": 20,
+              "max": 5.821999860927463,
+              "mean": 2.0418150001205504,
+              "min": 1.2216001050546765,
+              "p50": 1.730599906295538,
+              "p95": 3.348099999129772,
+              "p99": 5.821999860927463
+            }
+          },
+          "winner_disagreements_with_full_ad": 0
+        }
+      }
+    }
+  },
+  "run_id": "0c571188-ebeb-46f8-bdd8-12439799b10d",
+  "schema_version": 1,
+  "scope": "serial offline components; no HTTP, durable selection, or capacity claim",
+  "started_at": "2026-10-08T19:23:14.292671+00:00",
+  "status": "complete",
+  "summary": {
+    "empty_interests": {
+      "flat": {
+        "component_operations_per_second": 15.881376697697894,
+        "count": 9,
+        "fallback_rate": 1.0,
+        "missed_superior_count": 0,
+        "ordinary_recall": {
+          "count": 0,
+          "max": null,
+          "mean": null,
+          "min": null,
+          "p50": null,
+          "p95": null,
+          "p99": null
+        },
+        "tie_aware_recall": {
+          "count": 0,
+          "max": null,
+          "mean": null,
+          "min": null,
+          "p50": null,
+          "p95": null,
+          "p99": null
+        },
+        "timings_ms": {
+          "component_total_ms": {
+            "count": 9,
+            "max": 73.8234999589622,
+            "mean": 62.96683335676789,
+            "min": 56.46700004581362,
+            "p50": 61.911300057545304,
+            "p95": 73.8234999589622,
+            "p99": 73.8234999589622
+          },
+          "fallback_ms": {
+            "count": 9,
+            "max": 61.89130002167076,
+            "mean": 52.76259998532219,
+            "min": 48.69280010461807,
+            "p50": 51.791799953207374,
+            "p95": 61.89130002167076,
+            "p99": 61.89130002167076
+          },
+          "metadata_ms": {
+            "count": 9,
+            "max": 4.478999995626509,
+            "mean": 2.6431777643867664,
+            "min": 1.5628999099135399,
+            "p50": 2.412400091998279,
+            "p95": 4.478999995626509,
+            "p99": 4.478999995626509
+          },
+          "ranking_ms": {
+            "count": 9,
+            "max": 1.0812999680638313,
+            "mean": 0.490466663096514,
+            "min": 0.32760004978626966,
+            "p50": 0.4249999765306711,
+            "p95": 1.0812999680638313,
+            "p99": 1.0812999680638313
+          },
+          "retrieval_ms": {
+            "count": 9,
+            "max": 66.3500000955537,
+            "mean": 55.40577774970896,
+            "min": 50.36419990938157,
+            "p50": 54.01889991480857,
+            "p95": 66.3500000955537,
+            "p99": 66.3500000955537
+          },
+          "vector_ms": {
+            "count": 9,
+            "max": 0.0,
+            "mean": 0.0,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0
+          }
+        },
+        "winner_disagreements_with_full_ad": 0
+      },
+      "full_ad": {
+        "component_operations_per_second": 59.950480888639184,
+        "count": 9,
+        "fallback_rate": 0.0,
+        "missed_superior_count": 0,
+        "ordinary_recall": {
+          "count": 0,
+          "max": null,
+          "mean": null,
+          "min": null,
+          "p50": null,
+          "p95": null,
+          "p99": null
+        },
+        "tie_aware_recall": {
+          "count": 0,
+          "max": null,
+          "mean": null,
+          "min": null,
+          "p50": null,
+          "p95": null,
+          "p99": null
+        },
+        "timings_ms": {
+          "component_total_ms": {
+            "count": 9,
+            "max": 23.085599998012185,
+            "mean": 16.680433337266248,
+            "min": 11.589500005356967,
+            "p50": 16.414299956522882,
+            "p95": 23.085599998012185,
+            "p99": 23.085599998012185
+          },
+          "fallback_ms": {
+            "count": 9,
+            "max": 0.0,
+            "mean": 0.0,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0
+          },
+          "metadata_ms": {
+            "count": 9,
+            "max": 20.904599921777844,
+            "mean": 15.561133325617346,
+            "min": 10.807999991811812,
+            "p50": 15.496100066229701,
+            "p95": 20.904599921777844,
+            "p99": 20.904599921777844
+          },
+          "ranking_ms": {
+            "count": 9,
+            "max": 2.1640999475494027,
+            "mean": 1.112044439651072,
+            "min": 0.7778999861329794,
+            "p50": 1.060499926097691,
+            "p95": 2.1640999475494027,
+            "p99": 2.1640999475494027
+          },
+          "retrieval_ms": {
+            "count": 9,
+            "max": 20.904599921777844,
+            "mean": 15.561133325617346,
+            "min": 10.807999991811812,
+            "p50": 15.496100066229701,
+            "p95": 20.904599921777844,
+            "p99": 20.904599921777844
+          },
+          "vector_ms": {
+            "count": 9,
+            "max": 0.0,
+            "mean": 0.0,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0
+          }
+        },
+        "winner_disagreements_with_full_ad": 0
+      },
+      "hnsw": {
+        "component_operations_per_second": 13.76737480581169,
+        "count": 9,
+        "fallback_rate": 1.0,
+        "missed_superior_count": 0,
+        "ordinary_recall": {
+          "count": 0,
+          "max": null,
+          "mean": null,
+          "min": null,
+          "p50": null,
+          "p95": null,
+          "p99": null
+        },
+        "tie_aware_recall": {
+          "count": 0,
+          "max": null,
+          "mean": null,
+          "min": null,
+          "p50": null,
+          "p95": null,
+          "p99": null
+        },
+        "timings_ms": {
+          "component_total_ms": {
+            "count": 9,
+            "max": 132.05240003298968,
+            "mean": 72.63548890801354,
+            "min": 55.220500100404024,
+            "p50": 66.65629998315126,
+            "p95": 132.05240003298968,
+            "p99": 132.05240003298968
+          },
+          "fallback_ms": {
+            "count": 9,
+            "max": 60.8189000049606,
+            "mean": 54.02970000998013,
+            "min": 45.47779995482415,
+            "p50": 53.43089997768402,
+            "p95": 60.8189000049606,
+            "p99": 60.8189000049606
+          },
+          "metadata_ms": {
+            "count": 9,
+            "max": 3.6018999526277184,
+            "mean": 2.6326333043268986,
+            "min": 2.198000089265406,
+            "p50": 2.471499959938228,
+            "p95": 3.6018999526277184,
+            "p99": 3.6018999526277184
+          },
+          "ranking_ms": {
+            "count": 9,
+            "max": 0.7170999888330698,
+            "mean": 0.5248333456822567,
+            "min": 0.36179996095597744,
+            "p50": 0.5183001048862934,
+            "p95": 0.7170999888330698,
+            "p99": 0.7170999888330698
+          },
+          "retrieval_ms": {
+            "count": 9,
+            "max": 63.4037998970598,
+            "mean": 56.662333314307034,
+            "min": 47.945600003004074,
+            "p50": 57.01959994621575,
+            "p95": 63.4037998970598,
+            "p99": 63.4037998970598
+          },
+          "vector_ms": {
+            "count": 9,
+            "max": 0.0,
+            "mean": 0.0,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0
+          }
+        },
+        "winner_disagreements_with_full_ad": 0
+      }
+    },
+    "personalized": {
+      "flat": {
+        "component_operations_per_second": 23.60478880571807,
+        "count": 60,
+        "fallback_rate": 0.0,
+        "missed_superior_count": 0,
+        "ordinary_recall": {
+          "count": 60,
+          "max": 1.0,
+          "mean": 1.0,
+          "min": 1.0,
+          "p50": 1.0,
+          "p95": 1.0,
+          "p99": 1.0
+        },
+        "tie_aware_recall": {
+          "count": 60,
+          "max": 1.0,
+          "mean": 1.0,
+          "min": 1.0,
+          "p50": 1.0,
+          "p95": 1.0,
+          "p99": 1.0
+        },
+        "timings_ms": {
+          "component_total_ms": {
+            "count": 60,
+            "max": 108.7913999799639,
+            "mean": 42.3642849860092,
+            "min": 29.051000019535422,
+            "p50": 36.139899981208146,
+            "p95": 95.43569991365075,
+            "p99": 108.7913999799639
+          },
+          "fallback_ms": {
+            "count": 60,
+            "max": 0.0,
+            "mean": 0.0,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0
+          },
+          "metadata_ms": {
+            "count": 60,
+            "max": 100.16640007961541,
+            "mean": 32.80107500613667,
+            "min": 20.745099987834692,
+            "p50": 27.418099925853312,
+            "p95": 87.13589992839843,
+            "p99": 100.16640007961541
+          },
+          "ranking_ms": {
+            "count": 60,
+            "max": 1.9885000074282289,
+            "mean": 0.6007566679424295,
+            "min": 0.33549999352544546,
+            "p50": 0.5272999405860901,
+            "p95": 1.153700053691864,
+            "p99": 1.9885000074282289
+          },
+          "retrieval_ms": {
+            "count": 60,
+            "max": 101.49889998137951,
+            "mean": 34.2087349970825,
+            "min": 22.015499998815358,
+            "p50": 28.727099997922778,
+            "p95": 88.55849993415177,
+            "p99": 101.49889998137951
+          },
+          "vector_ms": {
+            "count": 60,
+            "max": 3.422299982048571,
+            "mean": 1.407659990945831,
+            "min": 0.8194999536499381,
+            "p50": 1.3737999834120274,
+            "p95": 1.9422000041231513,
+            "p99": 3.422299982048571
+          }
+        },
+        "winner_disagreements_with_full_ad": 0
+      },
+      "full_ad": {
+        "component_operations_per_second": 49.921988571300226,
+        "count": 60,
+        "fallback_rate": 0.0,
+        "missed_superior_count": 0,
+        "ordinary_recall": {
+          "count": 0,
+          "max": null,
+          "mean": null,
+          "min": null,
+          "p50": null,
+          "p95": null,
+          "p99": null
+        },
+        "tie_aware_recall": {
+          "count": 0,
+          "max": null,
+          "mean": null,
+          "min": null,
+          "p50": null,
+          "p95": null,
+          "p99": null
+        },
+        "timings_ms": {
+          "component_total_ms": {
+            "count": 60,
+            "max": 106.3884999603033,
+            "mean": 20.031253333824377,
+            "min": 11.17010007146746,
+            "p50": 16.734899953007698,
+            "p95": 25.9325000224635,
+            "p99": 106.3884999603033
+          },
+          "fallback_ms": {
+            "count": 60,
+            "max": 0.0,
+            "mean": 0.0,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0
+          },
+          "metadata_ms": {
+            "count": 60,
+            "max": 104.75409997161478,
+            "mean": 18.50685665655571,
+            "min": 10.339600034058094,
+            "p50": 15.58650005608797,
+            "p95": 24.241600069217384,
+            "p99": 104.75409997161478
+          },
+          "ranking_ms": {
+            "count": 60,
+            "max": 2.9415000462904572,
+            "mean": 1.5130966571935762,
+            "min": 0.7826000219210982,
+            "p50": 1.3863000785931945,
+            "p95": 2.350499969907105,
+            "p99": 2.9415000462904572
+          },
+          "retrieval_ms": {
+            "count": 60,
+            "max": 104.75409997161478,
+            "mean": 18.50685665655571,
+            "min": 10.339600034058094,
+            "p50": 15.58650005608797,
+            "p95": 24.241600069217384,
+            "p99": 104.75409997161478
+          },
+          "vector_ms": {
+            "count": 60,
+            "max": 0.0,
+            "mean": 0.0,
+            "min": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0
+          }
+        },
+        "winner_disagreements_with_full_ad": 0
+      },
+      "hnsw": {
+        "component_operations_per_second": 7.934946872065332,
+        "count": 60,
+        "fallback_rate": 0.9,
+        "missed_superior_count": 21,
+        "ordinary_recall": {
+          "count": 60,
+          "max": 0.952,
+          "mean": 0.8376,
+          "min": 0.56,
+          "p50": 0.884,
+          "p95": 0.936,
+          "p99": 0.952
+        },
+        "tie_aware_recall": {
+          "count": 60,
+          "max": 1.0,
+          "mean": 0.9993,
+          "min": 0.986,
+          "p50": 1.0,
+          "p95": 1.0,
+          "p99": 1.0
+        },
+        "timings_ms": {
+          "component_total_ms": {
+            "count": 60,
+            "max": 241.5396999567747,
+            "mean": 126.02478833481048,
+            "min": 32.24130009766668,
+            "p50": 119.71160001121461,
+            "p95": 228.1829999992624,
+            "p99": 241.5396999567747
+          },
+          "fallback_ms": {
+            "count": 60,
+            "max": 202.84229994285852,
+            "mean": 89.90654833226775,
+            "min": 0.0,
+            "p50": 87.27670006919652,
+            "p95": 186.44690001383424,
+            "p99": 202.84229994285852
+          },
+          "metadata_ms": {
+            "count": 60,
+            "max": 107.54489991813898,
+            "mean": 25.739278316420194,
+            "min": 13.225700124166906,
+            "p50": 23.334800149314106,
+            "p95": 42.76899993419647,
+            "p99": 107.54489991813898
+          },
+          "ranking_ms": {
+            "count": 60,
+            "max": 1.6118999337777495,
+            "mean": 0.6330233319507291,
+            "min": 0.3264000406488776,
+            "p50": 0.5310999695211649,
+            "p95": 1.1708999518305063,
+            "p99": 1.6118999337777495
+          },
+          "retrieval_ms": {
+            "count": 60,
+            "max": 229.0995999937877,
+            "mean": 117.49007665396978,
+            "min": 25.8005999494344,
+            "p50": 110.2633000118658,
+            "p95": 217.47049991972744,
+            "p99": 229.0995999937877
+          },
+          "vector_ms": {
+            "count": 60,
+            "max": 5.821999860927463,
+            "mean": 1.8442500052818407,
+            "min": 1.1650000233203173,
+            "p50": 1.6562000382691622,
+            "p95": 3.348099999129772,
+            "p99": 5.821999860927463
+          }
+        },
+        "winner_disagreements_with_full_ad": 0
+      }
+    }
+  }
+}

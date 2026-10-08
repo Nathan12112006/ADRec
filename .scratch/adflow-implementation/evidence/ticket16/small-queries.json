@@ -1,0 +1,203 @@
+{
+  "empty_interests": [
+    {
+      "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+      "id": 253990559392963680,
+      "interests": []
+    },
+    {
+      "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+      "id": 416508125932733053,
+      "interests": []
+    },
+    {
+      "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+      "id": 498978861084124670,
+      "interests": []
+    }
+  ],
+  "personalized": [
+    {
+      "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+      "id": 4952450007473392229,
+      "interests": [
+        "sports",
+        "travel",
+        "movies",
+        "cars",
+        "technology"
+      ]
+    },
+    {
+      "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+      "id": 5872855804246741548,
+      "interests": [
+        "fashion",
+        "technology",
+        "finance",
+        "education",
+        "gaming"
+      ]
+    },
+    {
+      "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+      "id": 8901541591163676139,
+      "interests": [
+        "gaming",
+        "photography"
+      ]
+    },
+    {
+      "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+      "id": 8146908041271474503,
+      "interests": [
+        "food",
+        "technology",
+        "travel",
+        "sports"
+      ]
+    },
+    {
+      "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+      "id": 4231514233926029411,
+      "interests": [
+        "movies",
+        "technology",
+        "photography",
+        "finance"
+      ]
+    },
+    {
+      "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+      "id": 8470422869924442594,
+      "interests": [
+        "finance"
+      ]
+    },
+    {
+      "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+      "id": 6258086872609123157,
+      "interests": [
+        "finance",
+        "education",
+        "photography",
+        "travel",
+        "cars"
+      ]
+    },
+    {
+      "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+      "id": 2577923166391177696,
+      "interests": [
+        "fashion",
+        "education",
+        "sports",
+        "travel",
+        "finance"
+      ]
+    },
+    {
+      "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+      "id": 2683979656605148346,
+      "interests": [
+        "gaming"
+      ]
+    },
+    {
+      "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+      "id": 4100898853682870865,
+      "interests": [
+        "photography"
+      ]
+    },
+    {
+      "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+      "id": 4973468983480023606,
+      "interests": [
+        "travel",
+        "finance",
+        "fashion",
+        "education",
+        "music"
+      ]
+    },
+    {
+      "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+      "id": 6298925022621543061,
+      "interests": [
+        "cars",
+        "finance",
+        "movies",
+        "photography"
+      ]
+    },
+    {
+      "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+      "id": 4211578527286530403,
+      "interests": [
+        "music",
+        "technology",
+        "travel"
+      ]
+    },
+    {
+      "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+      "id": 2103658536417422123,
+      "interests": [
+        "technology",
+        "food"
+      ]
+    },
+    {
+      "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+      "id": 3398081175652238753,
+      "interests": [
+        "education"
+      ]
+    },
+    {
+      "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+      "id": 7412772987698222010,
+      "interests": [
+        "fitness"
+      ]
+    },
+    {
+      "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+      "id": 2649069422407749369,
+      "interests": [
+        "travel"
+      ]
+    },
+    {
+      "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+      "id": 5695630334628741780,
+      "interests": [
+        "sports",
+        "fashion",
+        "music",
+        "finance",
+        "photography"
+      ]
+    },
+    {
+      "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+      "id": 5108093957862461414,
+      "interests": [
+        "food",
+        "travel",
+        "photography",
+        "technology"
+      ]
+    },
+    {
+      "dataset_id": "339aa2ad-bd42-582c-9df9-2bd21d1f97d6",
+      "id": 3343608448702566505,
+      "interests": [
+        "cars",
+        "sports",
+        "photography"
+      ]
+    }
+  ]
+}
