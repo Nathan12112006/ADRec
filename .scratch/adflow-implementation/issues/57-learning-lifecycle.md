@@ -36,3 +36,12 @@ The resolved answers above are authoritative, including edge cases not repeated 
 ## Comments
 
 Created on 2026-10-07 from the accepted implementation handoff. No implementation, verification or human exercise is claimed complete.
+
+### Checkpoint offered — 2026-10-07
+
+Ticket 10's technical verification passed. Offered Nathan this exercise: explain why
+concurrent request retries and duplicate clicks produce one durable selection and one
+captured-bid credit, and what happens when commit fails or its response is lost. Then
+make or direct a small retry/concurrency scenario change and verify its result through
+the existing HTTP/PostgreSQL seam. No explanation or change has been supplied yet;
+this checkpoint stays `State: open`, separately from the technical Phase 1 gate.

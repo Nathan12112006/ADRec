@@ -5,6 +5,14 @@ reproducible entity seeding, durable recommendation replay, client-confirmed imp
 attributed clicks and simulated revenue through a synchronous PostgreSQL-backed API.
 Health checks, structured request logging and a backend/PostgreSQL Docker demo are available.
 
+Phase 1's technical gate passed on 2026-10-07: fresh migrations/default seeding,
+Docker and local startup, lifecycle replay/count reconciliation, database-outage health
+behavior, and 186 unit/PostgreSQL tests. See [ticket 10's commands and evidence](.scratch/adflow-implementation/issues/10-phase-one-gate.md).
+Candidate retrieval (Phase 2) is the next implementation phase. FAISS, CTR modeling,
+experiments, Redis, dashboards and performance benchmarks remain planned work.
+The separate [lifecycle learning checkpoint](.scratch/adflow-implementation/issues/57-learning-lifecycle.md)
+remains open; passing software checks does not certify human understanding.
+
 ## Docker demo
 
 Start Docker Desktop with Linux containers and Docker Compose. From the repository root,
