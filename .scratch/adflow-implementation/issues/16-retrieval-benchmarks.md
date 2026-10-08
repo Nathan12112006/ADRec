@@ -1,7 +1,7 @@
 # 16 — Measure exact and approximate retrieval quality and cost
 
 Status: ready-for-agent
-State: active
+State: done
 Type: task
 Kind: implementation
 Phase: 2 — Candidate retrieval
@@ -31,9 +31,9 @@ The resolved answers above are authoritative, including edge cases not repeated 
 
 ## Acceptance criteria
 
-- [ ] Ordinary and canonical tie-aware recall, boundary tolerance and missed-superior counts are correct on fixtures; k=0 is unavailable.
-- [ ] Actual scale/results are saved; only promote HNSW with lower full-retrieval P95 and at least 95% tie-aware recall.
-- [ ] No ANN/full-scale/speedup claim is made for an unrun or smaller comparison.
+- [x] Ordinary and canonical tie-aware recall, boundary tolerance and missed-superior counts are correct on fixtures; k=0 is unavailable.
+- [x] Actual scale/results are saved; only promote HNSW with lower full-retrieval P95 and at least 95% tie-aware recall.
+- [x] No ANN/full-scale/speedup claim is made for an unrun or smaller comparison.
 
 ## Comments
 
@@ -117,3 +117,18 @@ $env:ADFLOW_TEST_DATABASE_URL='postgresql+psycopg://adflow:adflow@127.0.0.1:5432
 .\.venv\Scripts\python.exe -m ruff check .
 .\.venv\Scripts\python.exe -m ruff format --check .
 ```
+
+### Completion and review — 2026-10-08
+
+Final regression: 423 tests passed in 121.83 seconds. Alembic reported no new upgrade operations. Strict mypy passed for 68 source files; Ruff lint passed and format check reported 68 files already formatted. Lock validation, wheel/sdist build and focused 24-test verification passed as recorded above.
+
+Code review used separate Standards and Spec agents against baseline 0e307cf4143977cce183667d9b334847c4cb27a9, followed by evidence rechecks through commits 29c0a0b and ab20e92. Standards: 0 findings. Spec: 0 findings. Both reviewers checked the saved reports and claim boundaries; the Spec reviewer recomputed report percentiles and confirmed hashes, query populations, fallback counts and failed promotion decisions.
+
+Final benchmark database reconciliation returned 1,100 users, 220 advertisers, 101,000 ads, 0 recommendations and 0 events. The local PostgreSQL server started for this work was stopped successfully; both isolated databases and all evidence remain retained. Exact reconciliation and cleanup from repository root:
+
+```powershell
+.local-postgres/pgsql/bin/psql.exe -h 127.0.0.1 -U adflow -d adflow_ticket16_benchmark -Atc "SELECT (SELECT count(*) FROM users), (SELECT count(*) FROM advertisers), (SELECT count(*) FROM ads), (SELECT count(*) FROM recommendations), (SELECT count(*) FROM events)"
+.local-postgres/pgsql/bin/pg_ctl.exe stop -D .local-postgres/data -w
+```
+
+Ticket 16 is complete. Flat remains the serving default. Ticket 17's Phase 2 completion gate is separate work; these component results do not alone unlock Phase 3.
