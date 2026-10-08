@@ -724,7 +724,7 @@ and [PostgreSQL row locks](https://www.postgresql.org/docs/18/explicit-locking.h
 Set `ADFLOW_RETRIEVAL_INDEX_PATH` to a prepared immutable snapshot directory to load it
 at application startup. Leave it unset/empty for exact current-inventory fallback. In
 Compose, use a path under `/artifacts`, where the existing artifact volume is mounted.
-For example, after the offline build commands above, set it to `/artifacts/flat` and
+For example, after the offline build commands above, set it to `/artifacts/exact-v1` and
 recreate the backend. No index is built during startup or requests. Flat is the initial
 default; loading an HNSW artifact is an explicit comparison, not a measured promotion.
 Missing, corrupt or incompatible startup artifacts keep serving through visibly marked

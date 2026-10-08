@@ -1,7 +1,7 @@
 # 15 — Integrate candidate retrieval into recommendation serving
 
 Status: ready-for-agent
-State: active
+State: done
 Type: task
 Kind: implementation
 Phase: 2 — Candidate retrieval
@@ -32,9 +32,9 @@ The resolved answers above are authoritative, including edge cases not repeated 
 
 ## Acceptance criteria
 
-- [ ] End-to-end tests prove downstream ranking uses at most the configured candidate count.
-- [ ] Replay never reretrieves; index/model-independent baseline serving and exact fallback work.
-- [ ] Snapshot/eligibility changes cannot save stale eligibility or mismatched score/bid fields.
+- [x] End-to-end tests prove downstream ranking uses at most the configured candidate count.
+- [x] Replay never reretrieves; index/model-independent baseline serving and exact fallback work.
+- [x] Snapshot/eligibility changes cannot save stale eligibility or mismatched score/bid fields.
 
 ## Comments
 
@@ -82,3 +82,26 @@ $env:ADFLOW_RUN_POSTGRES_TESTS='1'
 ```
 
 The initial sandbox run could not connect to PostgreSQL; a subsequent outside-sandbox attempt using adflow_test found that database absent. Neither failure demonstrated an application defect. Local ticket-specific database selection resolved setup. Compose configuration validation passed; no Docker image rebuild or container startup is claimed for this ticket. Native HTTP startup with persisted Flat/HNSW and failure artifacts is covered by TestClient tests. Artifacts are generated under pytest temporary directories and use per-test dataset UUIDs; no fixed production artifact was changed.
+
+### Final regression and review — 2026-10-08
+
+Final complete native regression: **399 passed in 82.75 seconds** against adflow_ticket15_test. Ruff lint and formatting: **62 files passed**. Strict mypy: **62 source files passed**. Isolated test Alembic drift check: **No new upgrade operations detected**. Compose configuration validation and git diff whitespace check passed. The final full suite includes the corrected independent-opportunity accounting regression; no failing tests remain.
+
+Implementation committed as `f6e66d4` on current branch `main`. Applied code-review with two independent read-only agents using `git diff 8eb6608806a75dd51c4eb608b87107bc4d43b2d1...HEAD` and the implementation commit list. After review, corrected README's example snapshot path to match its existing offline build command (`/artifacts/exact-v1`); this is documentation only.
+
+#### Standards
+
+No actionable findings. The changes follow the documented domain vocabulary, preserve local ticket history, and record commands, fixture identity, complexity, and verification limitations. No baseline smell warrants a change in the reviewed diff.
+
+#### Spec
+
+No actionable findings. Missing or partial requirements: none within ticket 15's scope. Scope creep: none; startup snapshot configuration, documentation and timings support serving integration. Incorrect behavior: none; ranking consumes bounded candidates, replay precedes retrieval, winner locking and metadata checks preserve eligibility and coherent bid/score snapshots, and fallback remains available without an index or model.
+
+Total findings: **Standards 0; Spec 0**. All acceptance criteria passed. Ticket 16 (retrieval quality/cost benchmarks) is the next open agent ticket; no benchmark work is claimed here. The local PostgreSQL server started for these checks was stopped after verification; the ticket-specific test database and all earlier databases were retained.
+
+Cleanup from repository root:
+
+```powershell
+.local-postgres/pgsql/bin/pg_ctl.exe stop -D .local-postgres/data -w
+git diff --check
+```
