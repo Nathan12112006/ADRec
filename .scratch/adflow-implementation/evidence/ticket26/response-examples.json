@@ -1,0 +1,120 @@
+{
+  "dataset_id": "989b48ed-aa64-5b2c-b784-74c4d098e058",
+  "examples": {
+    "expected-value": {
+      "click": {
+        "ad_id": 8438278399151624964,
+        "created_at": "2026-10-09T02:46:05.443291Z",
+        "event_type": "click",
+        "recommendation_id": "1ec54648-dbe3-465f-8576-97a7d4897143",
+        "simulated_revenue": "100.0000",
+        "user_id": 5387710555606963264
+      },
+      "duplicate_click_equal": true,
+      "first": {
+        "created_at": "2026-10-09T02:46:05.117059Z",
+        "recommendation_id": "1ec54648-dbe3-465f-8576-97a7d4897143",
+        "selection": {
+          "advertiser_id": 4906141352011123395,
+          "bid": "100.0000",
+          "category": "cars",
+          "description": "Fictional sports advertisement for the AdFlow demo.",
+          "feature_version": "ctr-features-v1",
+          "id": 8438278399151624964,
+          "interests": [
+            "cars"
+          ],
+          "model_id": "1597174fe75a23b1b7c5b0be58ab3ded6a63b542a3ed9408d3247e70bc1d1055",
+          "model_version": "ctr-logistic-v1",
+          "predicted_ctr": 0.017334713604441356,
+          "retrieval": {
+            "elapsed_ms": 32.390799999120645,
+            "expansion_count": 0,
+            "fallback_elapsed_ms": 22.89580000069691,
+            "fallback_reason": "missing_index",
+            "fallback_scanned_count": 2,
+            "hnsw_ef_search": null,
+            "index_version": null,
+            "metadata_elapsed_ms": 9.494999998423737,
+            "mode": "exact_fallback",
+            "requested_count": 500,
+            "returned_count": 2,
+            "searched_count": 0,
+            "vector_elapsed_ms": 0.0,
+            "vector_version": "binary-cosine-v1",
+            "vocabulary_version": "topics-v1"
+          },
+          "score": "1.7334713604441356000000",
+          "score_meaning": "expected_simulated_dollars_per_impression",
+          "shared_interest_count": 0,
+          "strategy": "expected-value",
+          "strategy_version": "expected-value-v1",
+          "target_url": "https://example.test/ads/1",
+          "title": "Synthetic Sports Offer 1"
+        },
+        "user_id": 5387710555606963264
+      },
+      "replay_equal": true,
+      "status": 200
+    },
+    "interest-overlap": {
+      "click": {
+        "ad_id": 666339809602760155,
+        "created_at": "2026-10-09T02:46:05.364064Z",
+        "event_type": "click",
+        "recommendation_id": "3cd4a32b-2c95-4d5b-bb32-ea17a8f36eb0",
+        "simulated_revenue": "0.0000",
+        "user_id": 5387710555606963264
+      },
+      "duplicate_click_equal": true,
+      "first": {
+        "created_at": "2026-10-09T02:46:04.709822Z",
+        "recommendation_id": "3cd4a32b-2c95-4d5b-bb32-ea17a8f36eb0",
+        "selection": {
+          "advertiser_id": 4906141352011123395,
+          "bid": "0.0000",
+          "category": "music",
+          "description": "Fictional finance advertisement for the AdFlow demo.",
+          "feature_version": null,
+          "id": 666339809602760155,
+          "interests": [
+            "music"
+          ],
+          "model_id": null,
+          "model_version": null,
+          "predicted_ctr": null,
+          "retrieval": {
+            "elapsed_ms": 22.55489999879501,
+            "expansion_count": 0,
+            "fallback_elapsed_ms": 14.882600000419188,
+            "fallback_reason": "missing_index",
+            "fallback_scanned_count": 2,
+            "hnsw_ef_search": null,
+            "index_version": null,
+            "metadata_elapsed_ms": 7.67229999837582,
+            "mode": "exact_fallback",
+            "requested_count": 500,
+            "returned_count": 2,
+            "searched_count": 0,
+            "vector_elapsed_ms": 0.0,
+            "vector_version": "binary-cosine-v1",
+            "vocabulary_version": "topics-v1"
+          },
+          "score": 1,
+          "score_meaning": "distinct_shared_interest_count",
+          "shared_interest_count": 1,
+          "strategy": "interest-overlap",
+          "strategy_version": "baseline-v1",
+          "target_url": "https://example.test/ads/2",
+          "title": "Synthetic Finance Offer 2"
+        },
+        "user_id": 5387710555606963264
+      },
+      "replay_equal": true,
+      "status": 200
+    }
+  },
+  "passed": true,
+  "python": "3.10.11",
+  "scope": "In-process TestClient HTTP/ASGI requests; real startup, model and PostgreSQL, no dependency overrides. Not a socket/latency benchmark."
+}

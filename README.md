@@ -12,8 +12,10 @@ Phase 2 topic vectors, CPU Flat/HNSW snapshots and current-inventory candidate
 retrieval with marked fallback and bounded recommendation serving are available. The
 [Phase 2 technical gate](.scratch/adflow-implementation/issues/17-retrieval-gate.md)
 passed on 2026-10-08; Flat remains the serving default after HNSW failed promotion.
-CTR modeling,
-experiments, Redis, dashboards and HTTP load tests remain planned work.
+The CTR model and interchangeable V1/V2 ranking are available with validated
+artifacts, coherent selection snapshots and replay. See the
+[ranking technical gate](.scratch/adflow-implementation/issues/26-ranking-gate.md).
+Experiments, Redis, dashboards and HTTP load tests remain planned work.
 Independent historical exposure artifacts are available for offline model development;
 generation is explicit and never adds live recommendations or events.
 The separate [lifecycle learning checkpoint](.scratch/adflow-implementation/issues/57-learning-lifecycle.md)
@@ -1054,7 +1056,7 @@ models leave the adapter unavailable while baseline recommendations stay usable.
 The database readiness contract is unchanged. Restart the process to activate a
 different validated bundle; there is no automatic reload in the prediction loop.
 
-`app.api.dependencies.get_ctr_model` supplies the process adapter to future ranking
+`app.api.dependencies.get_ctr_model` supplies the process adapter to configured ranking
 consumers. `CTRModel.predict_batch(user, candidates)` takes detached profile/ad
 mapping snapshots, builds the five shared features together, and makes one pipeline
 call for the whole batch. `BatchPrediction` returns ad IDs/probabilities in input
@@ -1207,6 +1209,37 @@ ranking and database stages. No observed CTR/revenue lift is claimed.
 # From backend/, with the isolated PostgreSQL test database enabled:
 uv run --locked pytest tests/integration/test_ranked_recommendations.py tests/integration/test_recommendations.py tests/integration/test_retrieval_serving.py tests/unit/test_http.py
 ```
+
+## Ranking technical gate
+
+[Ticket 26](.scratch/adflow-implementation/issues/26-ranking-gate.md) records the
+Phase 4 checks, [results](.scratch/adflow-implementation/evidence/ticket26/results.md)
+and [exact commands](.scratch/adflow-implementation/evidence/ticket26/commands.md).
+Formula, batch alignment, deterministic ties, zero bids, model failures, changed
+inventory, replay and captured-bid accounting pass the existing public seams.
+No auction, blending or cross-strategy score normalization is added.
+
+The frozen comparison gives both strategies the same declared 500-ad pool for each
+of 200 synthetic users, using the retained full CTR model. It samples 100 paired
+outcomes per selected ad/user with the independent outcome generator; these are
+offline synthetic samples, not live experiment events. V1/V2 chose different ads
+for 97 users. Across 20,000 sampled impressions per strategy, V1/V2 recorded 797/941
+clicks and simulated revenue 3931.5300/4619.3400. This population reuses training
+entities and assumptions; repeated opportunities are not independent users. The
+numbers establish neither causal lift nor real-user effectiveness. Candidate IDs,
+input hashes, units and actual response examples are retained; incompatible raw
+score averages are not used.
+
+The gate also records separate feature, inference and production-sort component
+measurements for 1/50/500 candidates. Sort timings come from profiling public ranking
+calls and include profiling overhead; they are not request latency or speedup claims.
+
+The technical gate unlocks Phase 5 experiments. The separate
+[ranking learning checkpoint](.scratch/adflow-implementation/issues/60-learning-ranking.md)
+remains open: explain why 0.10 times bid1 outranks 0.02 times bid3, why click credit
+is bid1 rather than score0.10, and why no second auction occurs. Then direct a small
+candidate/probability change and verify the overlap/bid/ID tie rules and unavailable
+model behavior. Software checks do not certify that explanation or modification.
 
 ## CTR-model technical gate
 

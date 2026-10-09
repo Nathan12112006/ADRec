@@ -133,13 +133,17 @@ with TemporaryDirectory() as directory:
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         try:
-            for attempt in range(100):
+            for attempt in range(600):
                 try:
                     with urlopen(f"http://127.0.0.1:{port}/health/live", timeout=1):
                         break
-                except (URLError, TimeoutError):
-                    if server.poll() is not None or attempt == 99:
-                        raise
+                except (URLError, TimeoutError) as error:
+                    if server.poll() is not None or attempt == 599:
+                        server_log.flush()
+                        raise RuntimeError(
+                            "Test server did not become ready: "
+                            + (root / "server.log").read_text()
+                        ) from error
                     time.sleep(0.1)
 
             def post(path: str, body: dict, key: str | None = None) -> dict:
