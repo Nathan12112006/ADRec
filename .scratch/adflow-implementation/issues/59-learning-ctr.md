@@ -36,3 +36,14 @@ The resolved answers above are authoritative, including edge cases not repeated 
 ## Comments
 
 Created on 2026-10-07 from the accepted implementation handoff. No implementation, verification or human exercise is claimed complete.
+
+Checkpoint offered with ticket 23's technical gate on 2026-10-08. Explain why bid,
+IDs, outcomes and hidden generator preferences are excluded from CTR inputs; why
+chronological train/validation/test splits and training-only encoding prevent
+leakage; and what the training-base-rate comparison can support on synthetic data.
+Then make or direct a small development-data feature/regularization change and
+verify training/serving consistency. The retained final test has already been
+inspected and must not be reused for model selection; plan any fresh final holdout
+before fitting a new choice. Update affected technical evidence after a code/model
+change. No human explanation, modification, checks or understanding has yet been
+observed; this ticket stays open and does not block technical Phase 4 work after 23.

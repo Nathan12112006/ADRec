@@ -1,0 +1,1 @@
+{"bundle_id": "c8e991731f5877e6467e0eb8ce8cb33556f8111da33e97beaab877cd89646e03", "foreign_runtime_rejected": true, "model_id": "a962f3ddaacd40c6b8134ff8b8b5fd69a6147c858aa6b78f4fd91da8c04949da", "passed": true, "probabilities": [0.04142879101624907, 0.04142865710660125], "python": "3.12.15", "repeat_equal": true, "startup_resident": true}

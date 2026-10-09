@@ -1,0 +1,55 @@
+{
+  "passed": true,
+  "python": "3.10.11",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "processor": "AMD64 Family 23 Model 104 Stepping 1, AuthenticAMD",
+  "cpu_identifier": "AMD64 Family 23 Model 104 Stepping 1, AuthenticAMD",
+  "logical_cpus": 16,
+  "native_threads": 1,
+  "concurrent_callers": 1,
+  "model_id": "1597174fe75a23b1b7c5b0be58ab3ded6a63b542a3ed9408d3247e70bc1d1055",
+  "bundle_id": "0e2322403f52bb7a9ddcbb0115317bc642593428daee8cc693ec9fbfff5d2345",
+  "model_load_ms": 24.655700000948855,
+  "results": [
+    {
+      "candidates": 1,
+      "warmups": 10,
+      "repetitions": 50,
+      "features_ms": {
+        "median": 0.03525000010995427,
+        "p95": 0.049469999612483655
+      },
+      "batch_inference_ms": {
+        "median": 2.526449999095348,
+        "p95": 3.009179999753542
+      }
+    },
+    {
+      "candidates": 50,
+      "warmups": 10,
+      "repetitions": 50,
+      "features_ms": {
+        "median": 0.25134999941656133,
+        "p95": 0.304640001104417
+      },
+      "batch_inference_ms": {
+        "median": 2.7254500000708504,
+        "p95": 3.293940000094153
+      }
+    },
+    {
+      "candidates": 500,
+      "warmups": 10,
+      "repetitions": 50,
+      "features_ms": {
+        "median": 2.273550000609248,
+        "p95": 3.5749149988987483
+      },
+      "batch_inference_ms": {
+        "median": 3.584250000130851,
+        "p95": 5.424780000339524
+      }
+    }
+  ],
+  "limitation": "Local component timing; feature timing includes validation/matrix construction, inference timing includes output validation. Excludes retrieval, database, HTTP, load and overall request costs. No speedup/target claim; other verification processes may be active."
+}

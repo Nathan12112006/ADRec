@@ -1,0 +1,119 @@
+{
+  "passed": true,
+  "python": "3.10.11",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "output": "C:\\Project\\AD Rec\\artifacts\\ctr-ticket23-reproduction",
+  "comparison": "Exact manifests, pipeline checksum and evaluation outputs equal retained tickets 18-22 within the same runtime",
+  "inputs_unchanged": true,
+  "input_sha256": {
+    "history-ticket18-full\\first\\ads.jsonl": "01c96a36f226653707da4b7075c462142a19ab8e0171580a8d0f6ab916cc1539",
+    "history-ticket18-full\\first\\exposures.jsonl": "f33755409f532e59b434ed1cee322ac1730ca4d9110e816b018846d43fde4431",
+    "history-ticket18-full\\first\\manifest.json": "e771627fd68d88a14344061f5d84ea9040a50037a2e1324ada4a07a1a89a8526",
+    "history-ticket18-full\\first\\users.jsonl": "1d1499896060ed9f1b8c84ccf861f56971d451cd388785cb46da103e6f227a46",
+    "ctr-ticket19-full\\first\\manifest.json": "d0a9fd5f04cb2a1deef07f0e8868ade29005a2fcfb7bcf87bbe20d15c576eae5",
+    "ctr-ticket19-full\\first\\test.jsonl": "33ecdd2114931c9ddf90faa351f8acb2969a9261e2e54eb6dc5e2d4a3068f1f3",
+    "ctr-ticket19-full\\first\\train.jsonl": "41ef2ef7f945dfd974d631334644f748b5414f5e85dd6a3d5dd38d8fe399533c",
+    "ctr-ticket19-full\\first\\validation.jsonl": "833d3809d87c3a9b0bc182872a483202746b8d82bdb17ad88dc6383be0d76db1",
+    "ctr-ticket20-full\\first\\manifest.json": "b369be6aa65a5e3295f95e153f5285610f3892bb832e18aa9283d99def45ce2d",
+    "ctr-ticket20-full\\first\\pipeline.joblib": "62cf0485bcaa21b8e8ffe210d3493c239a0d2a9ca246749bd49ecfe03299f46a",
+    "ctr-ticket21-verified\\first\\reliability-test.png": "3b661901fc60084606b1a447720f2331aa974cda3174098815de00a06e3de68f",
+    "ctr-ticket21-verified\\first\\reliability-validation.png": "1605c7f4bc38b6fc24c7aef08018732fc987b22497b1b1afb83b3da274eceb2e",
+    "ctr-ticket21-verified\\first\\report.json": "b38b6f36893db6afbff16e7ea47882e4311ce585d2d20969a343dc1f3ab8a29a",
+    "ctr-ticket21-verified\\first\\report.md": "ca4819aeeccb338b8dee7a32412e5b18407fc1cad878c8019d00abc07475cb3f",
+    "ctr-ticket22-native\\manifest.json": "de8de3db36e35f170fda7dbf6feaf2d94de8713d376d544f976d761e9c3e85d8",
+    "ctr-ticket22-native\\pipeline.joblib": "62cf0485bcaa21b8e8ffe210d3493c239a0d2a9ca246749bd49ecfe03299f46a"
+  },
+  "runs": [
+    {
+      "stage": "history",
+      "wall_seconds": 84.74203649999981
+    },
+    {
+      "stage": "features",
+      "wall_seconds": 48.011185399998794
+    },
+    {
+      "stage": "training",
+      "wall_seconds": 15.486726000001
+    },
+    {
+      "stage": "evaluation",
+      "wall_seconds": 8.542021199998999
+    },
+    {
+      "stage": "package_reload_predict",
+      "wall_seconds": 2.714654999999766
+    }
+  ],
+  "history_id": "2ed92061-8b66-59b4-8a1b-509f340d47d0",
+  "dataset_id": "b26ddfe8-cac2-5631-9a8f-d136bb6e1e1c",
+  "counts": {
+    "clicks": 22351,
+    "eligible_ads": 100000,
+    "impressions": 1000000,
+    "users": 10000
+  },
+  "model_id": "1597174fe75a23b1b7c5b0be58ab3ded6a63b542a3ed9408d3247e70bc1d1055",
+  "bundle_id": "0e2322403f52bb7a9ddcbb0115317bc642593428daee8cc693ec9fbfff5d2345",
+  "baseline": {
+    "counts": {
+      "clicks": 15606,
+      "count": 700000,
+      "end_exclusive": 700000,
+      "first": {
+        "impressed_at": "2026-01-01T00:00:00.000000+00:00",
+        "impression_id": 0
+      },
+      "last": {
+        "impressed_at": "2026-01-09T02:26:39.000000+00:00",
+        "impression_id": 699999
+      },
+      "start_inclusive": 0
+    },
+    "fit_split": "train",
+    "probability": 0.022294285714285714
+  },
+  "metrics": {
+    "test": {
+      "model": {
+        "auc_unavailable_reason": null,
+        "brier_loss": 0.021620576027305386,
+        "clicks": 3337,
+        "count": 150000,
+        "log_loss": 0.10417315836655379,
+        "observed_ctr": 0.022246666666666668,
+        "roc_auc": 0.6259317678354278
+      },
+      "baseline": {
+        "auc_unavailable_reason": null,
+        "brier_loss": 0.021751754756462596,
+        "clicks": 3337,
+        "count": 150000,
+        "log_loss": 0.10665849954757697,
+        "observed_ctr": 0.022246666666666668,
+        "roc_auc": 0.5
+      }
+    },
+    "validation": {
+      "model": {
+        "auc_unavailable_reason": null,
+        "brier_loss": 0.02204823929431142,
+        "clicks": 3408,
+        "count": 150000,
+        "log_loss": 0.10542356571960358,
+        "observed_ctr": 0.02272,
+        "roc_auc": 0.6386663444155437
+      },
+      "baseline": {
+        "auc_unavailable_reason": null,
+        "brier_loss": 0.022203982832653072,
+        "clicks": 3408,
+        "count": 150000,
+        "log_loss": 0.10844811528546515,
+        "observed_ctr": 0.02272,
+        "roc_auc": 0.5
+      }
+    }
+  },
+  "limitation": "Frozen entity snapshots are reused; database export/entity generation are covered by retained earlier evidence. Wall costs include startup/validation/I/O and concurrent verification; no controlled performance claim. No generator or model setting changed after final-test inspection."
+}

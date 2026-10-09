@@ -1092,6 +1092,52 @@ local `.env` use are described above.
 [Persistence compatibility](https://scikit-learn.org/1.7/model_persistence.html) and
 [FastAPI lifespan](https://fastapi.tiangolo.com/advanced/events/).
 
+## CTR-model technical gate
+
+[Ticket 23](.scratch/adflow-implementation/issues/23-ctr-gate.md) records the Phase 3
+verification, exact commands and retained evidence. Its
+[full reproduction](.scratch/adflow-implementation/evidence/ticket23/reproduction.json)
+starts from frozen entity snapshots, regenerates one million exposures with the
+original seed/configuration, rebuilds chronological features, trains using the same
+validation-only selection, evaluates the frozen pipeline and packages/reloads it.
+It compares manifests, hashes and predictions with the retained tickets 18–22
+artifacts; source data and model settings are not adjusted after test inspection.
+Database export/entity generation are covered by the earlier evidence, rather than
+repeated by this frozen-snapshot reproduction.
+
+The later synthetic test cohort contains 150,000 exposures and 3,337 clicks. Model
+log loss is 0.10417316 versus the training-base-rate baseline's 0.10665850;
+ROC-AUC is 0.62593177 versus 0.5; Brier loss is 0.02162058 versus 0.02175175.
+The baseline probability is 15,606/700,000 = 0.02229429. Full validation/test results,
+provenance and reliability-bin counts remain in the
+[evaluation report](.scratch/adflow-implementation/evidence/ticket21/report.md).
+These scores describe the designed synthetic world. They do not prove real-user
+effectiveness, unseen-user/ad generalization, or better calibration merely because
+log loss is lower. Underperformance would remain visible; no quality target is required.
+
+[Separate inference measurements](.scratch/adflow-implementation/evidence/ticket23/inference-measurement.json)
+record candidate counts, hardware/runtime, feature construction and pipeline costs.
+They exclude retrieval, database and HTTP work and do not establish a request-latency
+target or speedup. Native/Docker smoke checks establish compatibility within their
+own runtimes and reject foreign-runtime bundles; cross-runtime artifact equality is
+not promised.
+
+Logistic Regression computes a weighted sum of encoded features and applies a sigmoid
+to produce a probability. Regularization limits coefficient fitting. Training fits
+encoding and coefficients using training rows; validation chooses regularization;
+the final chronological test scores the frozen choice. For C candidates and F encoded
+features, dense prediction is O(C*F), batch storage is O(C*F), and coefficients use
+O(F); sparse encoding changes practical cost. Feature construction and concurrent
+requests may dominate a small model's arithmetic.
+
+The technical gate unlocks Phase 4 ranking work. The separate
+[CTR learning checkpoint](.scratch/adflow-implementation/issues/59-learning-ctr.md)
+remains open: explain feature exclusions, chronological leakage safeguards and the
+base-rate comparison, then direct a small development-data change, verify shared
+training/serving behavior and record what the result can support. Any new model
+selection must use development data; inspecting the retained final test does not
+make it a new tuning set.
+
 ## Candidate-retrieval technical gate
 
 [Ticket 17](.scratch/adflow-implementation/issues/17-retrieval-gate.md) records the
