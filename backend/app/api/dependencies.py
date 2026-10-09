@@ -9,7 +9,12 @@ from sqlalchemy.orm import Session
 
 from app.core.clock import utc_now
 from app.core.config import Settings
+from app.ctr.serving import CTRModel
 from app.db.session import Database
+
+
+def get_ctr_model(request: Request) -> CTRModel:
+    return cast(CTRModel, request.app.state.ctr_model)
 
 
 def get_clock() -> Callable[[], datetime]:

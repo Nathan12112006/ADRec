@@ -3,14 +3,12 @@
 import argparse
 import hashlib
 import json
-import platform
 import sys
 from collections.abc import Sequence
 from importlib.metadata import version
 from pathlib import Path
 from typing import Any
 
-import joblib  # type: ignore[import-untyped]
 import numpy as np
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
@@ -21,10 +19,8 @@ from sklearn.metrics import (  # type: ignore[import-untyped]
 )
 from threadpoolctl import threadpool_limits  # type: ignore[import-untyped]
 
-from app.ctr.dataset import FEATURE_SCHEMA
-from app.ctr.features import FEATURE_VERSION
-from app.ctr.inputs import FEATURE_COLUMNS
-from app.ctr.training import DEPENDENCIES, MODEL_VERSION, _FeatureManifest, _load_split
+from app.ctr.artifacts import load_pipeline
+from app.ctr.training import _FeatureManifest, _load_split
 
 EVALUATION_VERSION = "ctr-evaluation-v1"
 LIMITATIONS = (
@@ -94,44 +90,13 @@ def _json(value: Any) -> str:
 
 def _load_frozen(model: Path, source_bytes: bytes) -> tuple[Any, dict[str, Any]]:
     manifest = json.loads((model / "manifest.json").read_bytes())
-    identity = {key: value for key, value in manifest.items() if key != "model_id"}
-    if hashlib.sha256(_json(identity).encode()).hexdigest() != manifest.get("model_id"):
-        raise ValueError("model manifest identity mismatch")
     if (
-        manifest.get("status") != "complete"
-        or manifest.get("model_version") != MODEL_VERSION
-        or manifest.get("feature_version") != FEATURE_VERSION
-        or manifest.get("feature_schema") != FEATURE_SCHEMA
-        or manifest.get("feature_columns") != list(FEATURE_COLUMNS)
-        or manifest.get("source", {}).get("manifest_sha256")
+        manifest.get("source", {}).get("manifest_sha256")
         != hashlib.sha256(source_bytes).hexdigest()
     ):
         raise ValueError("requires a compatible frozen model and its original feature splits")
-    if manifest.get("dependencies") != {name: version(name) for name in DEPENDENCIES} or (
-        manifest.get("runtime")
-        != {"python": platform.python_version(), "implementation": platform.python_implementation()}
-    ):
-        raise ValueError(
-            "model runtime/dependencies mismatch; use the original training environment"
-        )
-    artifact = manifest["artifact"]
-    if (
-        artifact["filename"] != "pipeline.joblib"
-        or hashlib.sha256((model / "pipeline.joblib").read_bytes()).hexdigest()
-        != artifact["sha256"]
-    ):
-        raise ValueError("model artifact checksum mismatch")
     try:
-        pipeline = joblib.load(model / "pipeline.joblib")
-        if pipeline.classes_.tolist() != [0, 1]:
-            raise ValueError("requires binary classifier classes [0,1]")
-        fixture = manifest["prediction_fixture"]
-        np.testing.assert_allclose(
-            pipeline.predict_proba(np.asarray(fixture["rows"], dtype=object)),
-            fixture["probabilities"],
-            rtol=0,
-            atol=1e-12,
-        )
+        pipeline = load_pipeline(model / "pipeline.joblib", manifest)
     except Exception as error:
         raise ValueError(f"frozen pipeline/fixture rejected: {error}") from error
     return pipeline, manifest
@@ -248,6 +213,7 @@ def evaluate(features: Path, model: Path, output: Path, *, bins: int = 20) -> di
     _FeatureManifest.model_validate(source)
     with threadpool_limits(limits=1):
         pipeline, model_manifest = _load_frozen(model, source_bytes)
+        positive_column = pipeline.classes_.tolist().index(1)
         training = source["splits"]["train"]
         rate = model_manifest["training_base_rate"]
         if (
@@ -275,7 +241,7 @@ def evaluate(features: Path, model: Path, output: Path, *, bins: int = 20) -> di
                 cohorts[name] = {
                     "boundaries": source["splits"][name],
                     "model": probability_metrics(
-                        labels.tolist(), probabilities[:, 1].tolist(), bins=bins
+                        labels.tolist(), probabilities[:, positive_column].tolist(), bins=bins
                     ),
                     "baseline": probability_metrics(
                         labels.tolist(), [rate] * len(labels), bins=bins

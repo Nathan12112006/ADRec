@@ -39,10 +39,11 @@ class Settings(BaseSettings):
     )
     retrieval_search_limit: int = Field(default=4000, ge=1, le=MAX_SEARCH_LIMIT)
     retrieval_index_path: Path | None = None
+    ctr_model_path: Path | None = None
 
-    @field_validator("retrieval_index_path", mode="before")
+    @field_validator("retrieval_index_path", "ctr_model_path", mode="before")
     @classmethod
-    def empty_index_path(cls, value: str | Path | None) -> str | Path | None:
+    def empty_artifact_path(cls, value: str | Path | None) -> str | Path | None:
         return None if value == "" else value
 
     @model_validator(mode="after")

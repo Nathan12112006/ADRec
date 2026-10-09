@@ -17,6 +17,7 @@ from app.api.routes import router
 from app.core.config import Settings, load_settings
 from app.core.errors import WorkflowError
 from app.core.observability import configure_logging, logger, stages
+from app.ctr.serving import CTRModel, CTRUnavailable
 from app.db.session import Database
 from app.retrieval.snapshots import ActiveSnapshot, SnapshotLoadError
 
@@ -30,6 +31,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         database = Database(config)
         app.state.database = database
         try:
+            app.state.ctr_model = CTRModel.unavailable()
+            if config.ctr_model_path is not None:
+                try:
+                    app.state.ctr_model = CTRModel.load(config.ctr_model_path)
+                except CTRUnavailable:
+                    logger.warning(
+                        "CTR model unavailable; baseline serving remains available",
+                        extra={"request_context": {"event": "ctr_unavailable"}},
+                    )
             if config.retrieval_index_path is not None:
                 try:
                     app.state.snapshots.reload(config.retrieval_index_path)
@@ -43,6 +53,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="AdFlow", version="0.1.0", lifespan=lifespan)
     app.state.settings = config
     app.state.snapshots = ActiveSnapshot()
+    app.state.ctr_model = CTRModel.unavailable()
 
     def error_response(request: Request, status: int, code: str, message: str) -> JSONResponse:
         request.state.context["error_code"] = code

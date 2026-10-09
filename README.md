@@ -1022,6 +1022,76 @@ These offline metrics are separate from serving latency or simulated revenue.
 [probability calibration](https://scikit-learn.org/1.7/modules/calibration.html),
 [Matplotlib 3.10.8](https://pypi.org/project/matplotlib/3.10.8/).
 
+## CTR serving bundles and batch prediction
+
+Package the frozen model and its exact evaluation before starting a serving
+process. From `backend/`:
+
+```powershell
+uv run --locked python -m app.ctr.artifacts --model ../artifacts/ctr-model-demo --evaluation ../artifacts/ctr-evaluation-demo --output ../artifacts/ctr-serving-demo
+$env:ADFLOW_CTR_MODEL_PATH='../artifacts/ctr-serving-demo'
+uv run --locked uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000
+uv run --locked pytest tests/unit/test_ctr_serving.py
+```
+
+The packaging command copies the complete fitted `pipeline.joblib` and creates a
+content-identified `ctr-serving-bundle-v1` manifest. It retains the original model,
+feature definitions, source/split provenance, parameters, exact runtime/dependency
+versions, checksum, prediction fixture and evaluation report/metrics. Evaluation
+must belong to the exact same model and original cohort counts/boundaries. No
+training, recalibration or model selection occurs during packaging. Existing
+output directories are refused. Treat completed bundle directories as immutable.
+Use only trusted project-produced joblib artifacts; hashes detect accidental
+changes and do not make arbitrary uploaded artifacts safe.
+
+`ADFLOW_CTR_MODEL_PATH` is optional; empty means unconfigured. Application startup
+loads and validates a configured bundle once per serving process/lifespan.
+Validation checks bundle/model identities, pipeline checksum, schema/version/order,
+evaluation association, exact recorded Python/dependency versions, binary class
+labels and prediction-fixture agreement within `1e-12`. Offline evaluation uses
+the same pipeline compatibility validator. Missing, corrupt or incompatible
+models leave the adapter unavailable while baseline recommendations stay usable.
+The database readiness contract is unchanged. Restart the process to activate a
+different validated bundle; there is no automatic reload in the prediction loop.
+
+`app.api.dependencies.get_ctr_model` supplies the process adapter to future ranking
+consumers. `CTRModel.predict_batch(user, candidates)` takes detached profile/ad
+mapping snapshots, builds the five shared features together, and makes one pipeline
+call for the whole batch. `BatchPrediction` returns ad IDs/probabilities in input
+order with model ID, model/feature versions and separate feature/inference times.
+The adapter finds the positive column by label `1`, validates the binary label set,
+and checks output count, finiteness, `[0,1]` bounds and row sums. `predict_one`
+delegates to the batch path. Missing categorical fields and empty interests use
+the shared builder's conventions; unseen categorical strings are accepted by the
+persisted encoder. Empty batches return empty IDs/probabilities with zero measured
+work, even without an available model; they do not call the pipeline.
+
+Nonempty requests requiring the adapter raise typed `CTRUnavailable`, a
+`WorkflowError` with HTTP status 503/code `ctr_unavailable`, for model load or
+inference/output failures. The API's existing error handler provides a safe message
+without internal paths or exception details. The current recommendation API still
+uses the baseline; Phase 4 adds ranking strategies and CTR-dependent routes.
+No baseline substitution or invented probabilities occur inside the CTR adapter.
+Successful loaded adapters remain resident if their source files are removed;
+source changes affect only a later startup/load.
+
+The adapter has no database reads or per-candidate artifact loads. Feature/matrix
+work uses O(candidate count * raw feature count) storage; model prediction depends
+on encoded features and sparse matrix structure. Dense coefficient prediction is
+O(candidate count * encoded feature count). Batch timings separate shared feature
+building/validation/matrix construction from pipeline inference/output validation;
+they exclude artifact loading, retrieval, database and HTTP work. No latency target
+or speedup is assumed.
+
+For Docker, prepare/train/evaluate/package inside the intended image runtime with
+the existing `/artifacts` volume, then set
+`ADFLOW_CTR_MODEL_PATH=/artifacts/ctr-serving-demo` and recreate the backend. Native
+Windows Python 3.10 artifacts are rejected by the Python 3.12 container; retrain in
+that runtime rather than modifying recorded versions. Build/check commands and
+local `.env` use are described above.
+[Persistence compatibility](https://scikit-learn.org/1.7/model_persistence.html) and
+[FastAPI lifespan](https://fastapi.tiangolo.com/advanced/events/).
+
 ## Candidate-retrieval technical gate
 
 [Ticket 17](.scratch/adflow-implementation/issues/17-retrieval-gate.md) records the
