@@ -26,6 +26,8 @@ class EventResult:
     ad_id: int
     created_at: datetime
     simulated_revenue: Decimal
+    experiment_id: UUID | None = None
+    experiment_variant: Literal["control", "treatment"] | None = None
 
 
 def _record_event(
@@ -73,6 +75,8 @@ def _record_event(
             recommendation.ad_id,
             event.created_at,
             event.simulated_revenue,
+            recommendation.experiment_id,
+            recommendation.experiment_variant,
         )
     return result
 

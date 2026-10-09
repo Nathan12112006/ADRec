@@ -39,6 +39,10 @@ class CTRModel:
             pipeline.classes_.tolist().index(1) if pipeline is not None else None
         )
 
+    @property
+    def model_id(self) -> str | None:
+        return self._model_id
+
     @classmethod
     def load(cls, path: Path) -> "CTRModel":
         try:

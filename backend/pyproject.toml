@@ -14,6 +14,7 @@ dependencies = [
   "sqlalchemy>=2.0,<2.1",
   "alembic>=1.14,<2",
   "psycopg[binary]>=3.2,<4",
+  "redis==8.1.0",
   "uvicorn>=0.34,<1",
   "faiss-cpu==1.15.1",
   "scikit-learn==1.7.2",
@@ -30,6 +31,7 @@ dependencies = [
 dev = [
   "hatchling>=1.27,<2",
   "httpx2>=2,<3",
+  "locust==2.46.7; python_version >= '3.11'",
   "pytest>=8.3,<10",
   "ruff>=0.9,<1",
   "mypy>=1.14,<2",
@@ -40,6 +42,7 @@ adflow-seed = "app.seeding.cli:main"
 adflow-index = "app.retrieval.cli:main"
 adflow-retrieval-benchmark = "app.retrieval.benchmark_cli:main"
 adflow-history = "app.history.cli:main"
+adflow-simulate = "app.simulator.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]

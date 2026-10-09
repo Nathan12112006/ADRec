@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     retrieval_index_path: Path | None = None
     ctr_model_path: Path | None = None
     ranking_strategy: Literal["interest-overlap", "expected-value"] = "interest-overlap"
+    redis_url: SecretStr | None = None
+    redis_pool_max_connections: int = Field(default=8, ge=1, le=64)
+    redis_connect_timeout_seconds: float = Field(default=0.1, gt=0, le=1)
+    redis_socket_timeout_seconds: float = Field(default=0.1, gt=0, le=1)
+    redis_profile_ttl_seconds: int = Field(default=60, ge=1, le=60)
 
     @field_validator("retrieval_index_path", "ctr_model_path", mode="before")
     @classmethod
@@ -52,6 +57,35 @@ class Settings(BaseSettings):
         if self.retrieval_search_limit < self.retrieval_candidate_limit:
             raise ValueError("retrieval search limit must cover the candidate limit")
         return self
+
+    @field_validator("redis_url", mode="before")
+    @classmethod
+    def disabled_redis_url_disables_cache(
+        cls, value: str | SecretStr | None
+    ) -> str | SecretStr | None:
+        if isinstance(value, SecretStr):
+            value = value.get_secret_value()
+        if value == "" or value == "disabled":
+            return None
+        return value
+
+    @field_validator("redis_url")
+    @classmethod
+    def validate_redis_url(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is None:
+            return None
+        try:
+            url = make_url(value.get_secret_value())
+            valid = (
+                url.drivername in {"redis", "rediss"}
+                and bool(url.host)
+                and (url.port is None or 1 <= url.port <= 65535)
+            )
+        except (ArgumentError, ValueError):
+            valid = False
+        if not valid:
+            raise ValueError("use a Redis or TLS Redis URL")
+        return value
 
     @field_validator("database_url", "test_database_url")
     @classmethod

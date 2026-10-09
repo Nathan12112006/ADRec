@@ -7,6 +7,7 @@ from typing import Annotated, cast
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
+from app.cache.profiles import RedisProfileCache
 from app.core.clock import utc_now
 from app.core.config import Settings
 from app.ctr.serving import CTRModel
@@ -16,6 +17,10 @@ from app.ranking.strategies import ExpectedValue, InterestOverlap, RankingStrate
 
 def get_ctr_model(request: Request) -> CTRModel:
     return cast(CTRModel, request.app.state.ctr_model)
+
+
+def get_profile_cache(request: Request) -> RedisProfileCache:
+    return cast(RedisProfileCache, request.app.state.profile_cache)
 
 
 def get_clock() -> Callable[[], datetime]:

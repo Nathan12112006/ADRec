@@ -3,7 +3,7 @@
 A personalized advertising recommendation demo using synthetic data. The backend provides
 reproducible entity seeding, durable recommendation replay, client-confirmed impressions,
 attributed clicks and simulated revenue through a synchronous PostgreSQL-backed API.
-Health checks, structured request logging and a backend/PostgreSQL Docker demo are available.
+Health checks, structured request logging and a backend/PostgreSQL/Redis Docker demo are available.
 
 Phase 1's technical gate passed on 2026-10-07: fresh migrations/default seeding,
 Docker and local startup, lifecycle replay/count reconciliation, database-outage health
@@ -15,13 +15,44 @@ passed on 2026-10-08; Flat remains the serving default after HNSW failed promoti
 The CTR model and interchangeable V1/V2 ranking are available with validated
 artifacts, coherent selection snapshots and replay. See the
 [ranking technical gate](.scratch/adflow-implementation/issues/26-ranking-gate.md).
-Experiment persistence and stable assignment are available; management APIs and
-recommendation routing remain planned work, along with Redis, dashboards and HTTP
-load tests.
+Experiment persistence, stable assignment, draft/start/stop/list management APIs,
+and recommendation routing are available. The read-only dashboard is available at
+`http://127.0.0.1:5174` in the Docker demo. Reproducible HTTP load workloads are
+available through the pinned Locust development dependency.
 Independent historical exposure artifacts are available for offline model development;
 generation is explicit and never adds live recommendations or events.
 The separate [lifecycle learning checkpoint](.scratch/adflow-implementation/issues/57-learning-lifecycle.md)
 remains open; passing software checks does not certify human understanding.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  Clients[Demo client and traffic simulator] --> API[FastAPI service]
+  Dashboard[Read-only React dashboard] -->|GET overview, experiments, telemetry| API
+  API -->|durable selections, outcomes, events| PG[(PostgreSQL)]
+  API -->|bounded synthetic-user profile cache| Redis[(Optional Redis)]
+  API -->|immutable snapshots and model bundle| Artifacts[(Explicitly prepared artifacts)]
+  Prep[Offline preparation commands] -->|migrations and entity seed| PG
+  Prep -->|index, history, features, model, evaluation| Artifacts
+```
+
+PostgreSQL owns catalog, recommendation, experiment and lifecycle history. Redis only
+caches profile reads; unavailable or invalid cache entries fall back to PostgreSQL.
+The offline pipeline creates immutable retrieval and CTR artifacts explicitly. API startup
+loads configured artifacts but never migrates, seeds, generates history or trains a model.
+
+### Running dashboard evidence
+
+These screenshots were captured from the running Docker dashboard on 2026-10-09. The
+displayed inventory, events and experiment traffic are synthetic; the experiment view is
+descriptive and provisional, and the performance view has partial rolling-window coverage.
+
+![Live synthetic inventory and lifecycle overview](docs/images/dashboard-overview.png)
+
+![Live synthetic experiment comparison](docs/images/dashboard-experiments.png)
+
+![Live API performance, dependency and cache signals](docs/images/dashboard-performance.png)
 
 ## Docker demo
 
@@ -29,8 +60,13 @@ Start Docker Desktop with Linux containers and Docker Compose. From the reposito
 prepare a fresh demo explicitly, then start it normally:
 
 ```powershell
+Push-Location frontend
+npm ci
+$env:NODE_OPTIONS='--max-old-space-size=2048'
+npm run build
+Pop-Location
 docker compose config --quiet
-docker compose build backend
+docker compose build backend dashboard
 docker compose up -d --wait postgres
 docker compose run --rm backend python -m alembic upgrade head
 docker compose run --rm backend python -m app.seeding.cli
@@ -38,13 +74,31 @@ docker compose up -d --wait
 docker compose ps
 ```
 
-Open [Swagger UI](http://127.0.0.1:8000/docs),
+Open the [read-only dashboard](http://127.0.0.1:5174), [Swagger UI](http://127.0.0.1:8000/docs),
 [liveness](http://127.0.0.1:8000/health/live) or
 [readiness](http://127.0.0.1:8000/health/ready), then follow the HTTP walkthrough below.
 Preparation creates only the small default entity dataset. Migration and seeding are
 separate from ordinary `docker compose up -d --wait`; neither runs on API startup.
 No historical labels, model training, index builds or later services are included.
 Readiness tests database reachability; it does not certify migration/seed preparation.
+
+The small demo is 100 synthetic users, 20 advertisers and 1,000 ads. For retrieval
+evidence, ticket 16 records the separate 1,000-user / 200-advertiser / 100,000-ad
+comparison and its failed HNSW promotion gate. For offline model development, ticket 18
+records a separate 10,000-user / 100,000-ad / 1,000,000-exposure history run. Those are
+synthetic dataset and generator costs, not real advertising outcomes or serving-capacity
+claims. See the [retrieval evidence](.scratch/adflow-implementation/issues/16-retrieval-benchmarks.md),
+[history evidence](.scratch/adflow-implementation/issues/18-synthetic-history.md),
+[paired HTTP smoke matrix](.scratch/adflow-implementation/issues/49-benchmark-matrix.md),
+and [performance gate and limitations](.scratch/adflow-implementation/issues/51-performance-gate.md).
+
+Compose keeps index, history, features, evaluations and model bundles under `/artifacts`
+in the project-scoped `index_artifacts` volume. Every preparation step is an explicit
+CLI command with a new output directory; normal API startup only loads configured index
+and model artifacts. The offline history and CTR preparation commands are documented in
+[historical exposures](#offline-historical-exposures), [feature splits](#shared-ctr-features-and-chronological-data-splits),
+[training](#offline-ctr-pipeline-training), [evaluation](#frozen-ctr-probability-evaluation),
+and [serving bundle packaging](#ctr-serving-bundles-and-batch-prediction).
 
 The backend image uses digest-pinned Python 3.12.15 and uv 0.12.23, installs runtime wheels
 from `uv.lock` with `--locked --no-dev --no-install-project`, and runs source from `/app`.
@@ -56,13 +110,16 @@ before dependent containers start. Mechanisms follow official
 [uv Docker guidance](https://docs.astral.sh/uv/guides/integration/docker/) and
 [Compose startup ordering](https://docs.docker.com/compose/how-tos/startup-order/).
 
-Compose publishes only loopback ports 8000 (API) and 5432 (PostgreSQL), with disposable
-`adflow`/`adflow` credentials and application database `adflow`. Container database URLs use
-the `postgres` service hostname. The local `.env.example` URLs use `127.0.0.1`; Compose
+Compose publishes loopback ports 5174 (dashboard), 8000 (API), 5432 (PostgreSQL), and 6379 (disposable Redis),
+with disposable `adflow`/`adflow` credentials and application database `adflow`. Container
+database/cache URLs use the `postgres` and `redis` service hostnames. The local `.env.example`
+URLs use `127.0.0.1`; Compose
 overrides these two URLs and reads log/pool/timeout values from the host environment or
 root `.env`. Create `.env` from the example once for the local backend; Compose defaults
-need no dotenv file. Change port mappings and matching host URLs together if occupied.
-These settings are for the local demo, with no public hosting setup.
+need no dotenv file. Override the host API bind port with `ADFLOW_API_PORT` if 8000 is
+occupied (for example, `$env:ADFLOW_API_PORT='18000'` in PowerShell) and use that port
+for Swagger/API links. The dashboard continues to reach the backend through Compose DNS.
+The dashboard container serves the production Vite bundle and proxies only GET requests for `/api/*` and `/health/*` to the backend. Its built-in `/health` endpoint checks the static server; API/database/cache readiness remains at the linked backend readiness URL. The development server remains available from `frontend/` on port 5173. These settings are for the local demo, with no public hosting setup.
 Use explicit IPv4 host URLs to match the published bind address: on this Windows host,
 `localhost` first tried IPv6 and added a measured five-second fallback per new connection.
 
@@ -167,6 +224,11 @@ Names have the `ADFLOW_` prefix. Unknown dotenv keys fail validation to catch mi
 | `DB_LOCK_TIMEOUT_SECONDS` | 3 | Integer, 1–30 seconds waiting for a PostgreSQL lock |
 | `DB_POOL_SIZE` | 5 | Integer, 1–20 connections |
 | `DB_MAX_OVERFLOW` | 5 | Integer, 0–20 additional connections |
+| `REDIS_URL` | unset locally; Compose uses `redis://redis:6379/0` | Optional `redis://` or `rediss://` URL; unset disables the profile cache |
+| `REDIS_POOL_MAX_CONNECTIONS` | 8 | Integer, 1–64 shared pool connections; exhaustion fails fast |
+| `REDIS_CONNECT_TIMEOUT_SECONDS` | 0.1 | Positive, at most 1 second |
+| `REDIS_SOCKET_TIMEOUT_SECONDS` | 0.1 | Positive, at most 1 second |
+| `REDIS_PROFILE_TTL_SECONDS` | 60 | Integer maximum TTL, 1–60 seconds; entries use downward jitter |
 | `RETRIEVAL_CANDIDATE_LIMIT` | 500 | Integer, 1–500 candidates; not yet used by serving |
 | `RETRIEVAL_SEARCH_LIMIT` | 4000 | Integer, 1–1,000,000; at least candidate limit; future search expansion bound |
 
@@ -179,6 +241,37 @@ sets the connection timezone to UTC, and disconnects sessions left idle in a tra
 30 seconds. Statement timeouts bound server execution, not an end-to-end HTTP deadline.
 `ADFLOW_LOG_LEVEL` controls application request logging. Uvicorn's `--log-level` option
 controls server logs separately.
+
+The Redis settings configure the optional profile cache. It stores only validated,
+versioned synthetic-user profiles under dataset-specific keys. PostgreSQL remains
+authoritative: serving reads the user's dataset ID from PostgreSQL to form the key, then
+uses cached profile fields on a hit. Misses and Redis read failures load the profile from
+PostgreSQL; a Redis failure bypasses further cache work for that request. Cache writes are
+best-effort, and profile edits commit to PostgreSQL before invalidation. An in-flight read
+can repopulate the old profile after invalidation; the maximum 60-second TTL bounds that
+stale entry's remaining residence. Dataset replacement or reseeding requires pausing API
+traffic and switching to the replacement dataset ID, which creates a new cache namespace.
+There is no public profile-edit endpoint. Redis-py is pinned to 8.1.0, with its documented
+default retries explicitly disabled for this cache.
+
+Compose runs Redis 8.0.2 with a 128 MB `allkeys-lru` limit, a 192 MB container memory cap,
+and both RDB snapshots and AOF disabled. The cache is disposable and repopulates from
+PostgreSQL after eviction or restart. Adjust the Redis URL, pool, timeout and profile TTL
+through `ADFLOW_REDIS_*`; socket/connect bounds are not a total request deadline. The API
+does not wait for Redis during startup, so an unavailable service remains a degraded cache.
+To compare profile reads against cold and warm Redis access patterns, start the prepared
+PostgreSQL and Redis services and run this component-only measurement from `backend/`:
+
+```powershell
+$env:ADFLOW_DATABASE_URL = 'postgresql+psycopg://adflow:adflow@127.0.0.1:5432/adflow'
+$env:ADFLOW_TEST_DATABASE_URL = 'postgresql+psycopg://adflow:adflow@127.0.0.1:5432/adflow_test'
+$env:ADFLOW_REDIS_URL = 'redis://127.0.0.1:6379/0'
+uv run --locked python scripts/profile_cache_comparison.py --operations 500
+```
+
+It uses the first 50 users, deletes only their selected dataset-scoped profile keys to
+establish cold runs, then measures a warm repeat. It prints profile-row query counts and
+elapsed time; ranking, retrieval, and HTTP request latency are outside this measurement.
 
 Both URLs are secret fields, hidden in normal settings representations. The environment
 loader raises `ConfigurationError` containing only field locations and error codes, never
@@ -1193,7 +1286,9 @@ new optional context fields; replay does not fabricate model attribution.
 
 Request-key lookup happens before retrieval or ranking. A saved selection is replayed
 after bid, inventory, model or configured-strategy changes, including model failure;
-it is not rescored. Empty inventory persists the existing replayable 204 no-ad outcome
+it is not rescored. A successful recommendation response sets `replayed` to `true` for
+an idempotent replay and `false` for a newly committed opportunity, allowing clients
+and load reports to keep retries/replays distinct from new selections. Empty inventory persists the existing replayable 204 no-ad outcome
 without model inference. Nonempty V2 with an unusable model or invalid model output
 returns safe `ctr_unavailable`/503 and persists no opportunity. It does not silently
 serve V1. A later valid retry of that key may proceed under the explicitly configured
@@ -1263,12 +1358,44 @@ experiment globally, including racing transactions. Timestamp/state checks and
 triggers apply to raw SQL/ORM writes; deletion and truncation are rejected so history
 survives future experiments. A configuration change after start requires a new record.
 
-This ticket supplies persistence and assignment. Management/activation APIs belong
-to ticket28, and routing/immutable recommendation attribution to ticket29. Existing
-recommendations still use the server-configured strategy; creating a database record
-does not yet route traffic. [Ticket27 evidence](.scratch/adflow-implementation/issues/27-experiment-schema-assignment.md)
-records known vectors, cross-process reproduction, schema upgrade and concurrency
-checks. No experiment effectiveness or human-learning completion is claimed.
+Management uses `POST /api/v1/experiments` to create a draft,
+`POST /api/v1/experiments/{id}/start` and `/stop` for one-way transitions, and
+`GET /api/v1/experiments` to list retained records. Start requires the currently
+loaded validated model to match the pinned model ID. PostgreSQL's partial unique
+index arbitrates simultaneous starts; a losing start receives 409. Allocation must
+give both variants traffic. HNSW settings are validated at creation; if an index is
+unavailable later, the retrieval contract permits exact current-catalog fallback.
+New recommendations use a shared PostgreSQL advisory lock around experiment lookup,
+selection and attribution commit, which serializes routing against start/stop
+transactions. Both variants share the experiment retrieval settings. Experiment ID
+and variant are persisted on recommendations and request outcomes, while executed
+strategy/model/feature versions remain in the immutable selection snapshot. Retries
+replay the original context after stop. Event requests identify only recommendation
+IDs, so attribution comes from the saved recommendation; clients cannot supply a
+variant. No-ad outcomes retain their assignment for diagnostics. The APIs add no
+admin UI. [Ticket27 evidence](.scratch/adflow-implementation/issues/27-experiment-schema-assignment.md)
+records assignment and persistence checks.
+
+`GET /api/v1/experiments/{id}/results` reports control and treatment by
+recommendation creation cohort. Optional `start_at` and `end_at` query parameters
+are timezone-aware; the start is inclusive and end exclusive. One server as-of time
+limits accepted events. A later impression or click remains with its recommendation
+cohort if it arrived by that cutoff. Each variant returns attempts, attempted users,
+no-ad outcomes, recommendations, exposed users, impressions, clicks, captured
+simulated revenue, CTR and simulated revenue per exposed user. Zero-denominator ratios
+are null. The comparison includes absolute differences and percentage relative lift
+where the control value is defined; zero control values have null relative lift.
+Results include exact-fallback counts and process-local selection, no-ad, replay and
+error latency populations. Running experiments and stopped experiments with any
+unexpired recommendation remain provisional. The response labels synthetic data,
+cohort bounds, as-of time, event-window maturity and telemetry coverage. It makes no
+significance test or automatic winner declaration.
+
+```powershell
+# From backend/, with the isolated PostgreSQL test database enabled:
+uv run --locked alembic upgrade head
+uv run --locked pytest tests/integration/test_http_lifecycle.py tests/integration/test_experiments.py tests/integration/test_ranked_recommendations.py
+```
 
 ```powershell
 # From backend/, with the isolated PostgreSQL test database enabled:
@@ -1502,6 +1629,36 @@ deactivation affect neither attribution nor eligibility of this saved recommenda
 Separate recommendations of the same ad can each receive their own impression and click.
 Summing accepted click rows provides simulated revenue without a second mutable counter.
 
+## Live traffic simulator
+
+Install the backend package, start the API, and run `adflow-simulate` from `backend/`.
+The default run lasts two minutes and schedules five new ad opportunities per second:
+
+```powershell
+uv run --locked adflow-simulate
+uv run --locked adflow-simulate --base-url http://127.0.0.1:8000 --duration-seconds 30 --rate-per-second 2 --seed 18
+uv run --locked adflow-simulate --scenario duplicates --duration-seconds 10
+uv run --locked adflow-simulate --scenario no-interest --duration-seconds 10
+uv run --locked adflow-simulate --scenario no-ad --duration-seconds 10
+```
+
+The simulator reads synthetic-user profiles from the configured application database;
+the API remains authoritative for recommendations, display confirmations, clicks, and
+experiment assignment. Each invocation creates a fresh UUID run ID, and every opportunity
+gets a stable run-scoped idempotency key. Transient delivery failures retry up to three
+times with the same key; only accepted first events contribute to the live totals. A
+sampled click is attempted only after an accepted impression, using the same independent
+`click-world-v1` outcome generator as offline history. Ranking scores and experiment
+variant do not affect click probability.
+
+`duplicates` resends identical impression/click requests to demonstrate endpoint
+deduplication. `no-interest` and `no-ad` select only matching existing user profiles; if
+the configured database has none, the command exits without sending traffic. No-ad,
+validation, and delivery failures are reported without being counted as negative click
+labels. The JSON summary separates live accepted events from offline historical exposures,
+reports actual attempts/rate/completion, retries and failures, and counts only variants
+returned by the backend. A variant appears when the run sampled a user assigned to it.
+
 The `(recommendation_id, event_type)` primary key is the concurrency authority. After
 prechecks, `INSERT ... ON CONFLICT (recommendation_id, event_type) DO NOTHING` suppresses
 only a duplicate of that event identity. A racing insert waits for the other transaction,
@@ -1567,8 +1724,8 @@ docker compose exec -T postgres psql -U adflow -d adflow -c "SELECT event_type, 
 Both counts must be one; the click total must equal `selection.bid`, and impression
 revenue must be zero. Retries return the same recommendation/event without extra credit.
 
-The recommendation response contains `recommendation_id`, `user_id`, `created_at`, and
-`selection` (the saved ad payload, decimal bid, overlap score and strategy identity).
+The recommendation response contains `recommendation_id`, `user_id`, `created_at`,
+`replayed`, and `selection` (the saved ad payload, decimal bid, overlap score and strategy identity).
 The baseline's `predicted_ctr` is null. Reusing the key replays the saved response.
 With no eligible ad, the response is 204 with an empty body; handle this before sending
 events. Event responses contain `recommendation_id`, `event_type`, server-derived
@@ -1594,8 +1751,33 @@ Unexpected application failures return a safe 500 `internal_error`. Every HTTP r
 includes a server-generated `X-Request-ID`.
 
 `/health/live` performs no database work. `/health/ready` executes `SELECT 1` through the
-bounded pool and returns 503 on connectivity failure. It checks reachability; migrations
-remain an explicit setup check.
+bounded PostgreSQL pool and returns 503 only when PostgreSQL is unavailable. Its status
+remains `ready` when Redis is down; `dependencies.redis` reports `degraded` (or `disabled`
+when the optional cache is not configured). `profile_cache` reports process-lifetime hits,
+misses, invalid payloads, read/write/invalidation errors, bypass reasons, and hit ratio
+`hits / (hits + misses)`; the ratio is null without hits or misses. Counters reset on process
+restart, and cache health probes do not change hit/miss counts. `capabilities` separately
+reports active HNSW/Flat retrieval or exact fallback and whether V2 ranking has a usable
+CTR model. These fields describe process capability, not a guarantee that a specific
+experiment is compatible. Readiness checks reachability; migrations remain explicit.
+
+`GET /api/v1/analytics/overview` returns a single repeatable-read snapshot for the dataset
+with the latest creation timestamp (UUID breaks ties). Its explicit dataset-lifetime window
+and durable-snapshot coverage identify the scope; it is provisional while any recommendation
+event window remains open. It includes inventory, durable
+request outcomes, recommendations, accepted impression/click totals, exposed users,
+observed CTR and simulated click revenue. Events are scoped through their saved
+recommendations; request outcomes are scoped through their users. Offline history is
+excluded. `as_of` is the common event cutoff. With no dataset, the endpoint succeeds with
+`availability: "empty"`, zero counts and null CTR.
+
+`GET /api/v1/metrics` returns process-local telemetry for the rolling 15-minute window,
+including actual coverage, sample and drop counts, endpoint/population latency in
+milliseconds, stage timings, errors and retrieval fallbacks. It also includes process-lifetime
+cache counters, cache health, and model/index capabilities. A process restart resets
+telemetry and cache counters; missing coverage remains explicitly incomplete, and a null
+ratio is not rendered as zero activity. This endpoint does not poll PostgreSQL; use
+`/health/ready` for current database reachability.
 
 Application logger `adflow.requests` emits one JSON INFO record per request with request
 ID, route template, method, status and duration in milliseconds. Validated workflow
@@ -1605,7 +1787,17 @@ ad payloads, database exception text and credentials are excluded. Fixed stage h
 measure `selection_ms`, `recommendation_ms`, `event_ms` or `database_probe_ms` where run;
 replays skip selection. Workflow timers include commit time. Request duration ends when
 response headers are prepared; it is not client-observed network latency. Timings are
-bounded request-local data, with no metric history or telemetry platform. New decisions
+bounded request-local data. The process also keeps a 15-minute rolling telemetry window,
+capped at 10,000 request samples and approximately 8 MB. It separates new selections,
+no-ad outcomes, replays, impressions, clicks, and errors by experiment/variant where
+known; recommendation failures with unresolved assignment remain marked unknown.
+Request and stage latency summaries use per-population samples and do not combine
+percentiles. Retrieval mode and fallback reason are counted separately, including
+fallbacks from no-ad outcomes. This telemetry is volatile process memory: a restart
+starts a new coverage interval, and count/byte-cap evictions are reported as drops.
+Until a complete 15-minute interval has elapsed without drops, coverage is marked
+incomplete rather than treated as zero activity. Durable PostgreSQL events remain the
+source of truth for impressions and clicks. New decisions
 also report `retrieval_ms` (including `vector_ms`, `metadata_ms`, `fallback_ms`),
 `ranking_ms`, and `database_ms` for lifecycle key/profile/winner queries, flushes and
 commit, excluding retrieval's database work (already included in metadata/fallback).
@@ -1708,7 +1900,7 @@ application-only deduplication; no throughput claim is made.
 | `backend/pyproject.toml` | Package, dependency ranges, pytest, Ruff, strict mypy configuration |
 | `backend/uv.lock` | Reproducible resolved dependency versions |
 | `backend/Dockerfile` and `backend/.dockerignore` | Locked runtime image, non-root API startup, health check and filtered build context |
-| `docker-compose.yml` | Local backend/PostgreSQL services, loopback ports, persistent volume and dependency health ordering |
+| `docker-compose.yml` | Local backend/PostgreSQL/Redis services, loopback ports, persistent data volume and dependency health ordering |
 
 The approved layout adds remaining subsystems when their
 implementation tickets begin. Empty subsystem
@@ -1728,3 +1920,173 @@ the lock resolves FastAPI 0.142.4, Pydantic 2.13.5, pydantic-settings 2.15.0,
 SQLAlchemy 2.0.54, Alembic 1.20.0, psycopg 3.3.6, Uvicorn 0.54.0, and httpx2 2.13.1.
 Compatibility evidence is the
 local import, tests, type/lint checks, and wheel build, rather than version ranges alone.
+
+## Reproducible HTTP workloads
+
+The backend development group pins Locust 2.46.7 (Python 3.11 or newer). Run one
+workload at a time from `backend/` against a seeded database and a running API:
+
+```powershell
+uv run --locked locust -f loadtests/recommendation_only.py --headless `
+  --host http://127.0.0.1:8000 -u 4 -r 2 -t 30s `
+  --adflow-seed 20261009 --adflow-user-selection uniform --adflow-max-retries 1
+
+uv run --locked locust -f loadtests/lifecycle.py --headless `
+  --host http://127.0.0.1:8000 -u 4 -r 2 -t 30s `
+  --adflow-seed 20261009 --adflow-user-selection hot --adflow-hot-user-count 5 `
+  --adflow-max-retries 1
+```
+
+The recommendation-only workload durably records recommendation outcomes and
+selections. The lifecycle workload also records each accepted impression before it
+independently samples a click. Both choose synthetic users from the newest dataset in
+the configured application database. `uniform` samples that full population;
+`hot` samples the deterministic lowest-ID subset configured by
+`--adflow-hot-user-count`. The seed controls profile selection and click outcomes.
+
+Each run gets a UUID and each opportunity gets a fresh idempotency key. Bounded retries
+reuse the same key, and the response's `replayed` flag identifies backend-confirmed
+replays. The JSON run summary separates transport errors, timeouts, HTTP statuses,
+application error codes, and semantic response errors. Backend replay telemetry is
+printed separately because its counter is process-local and rolling-window scoped,
+not attributable to one Locust run. Locust's `-u` value is concurrent virtual users;
+the zero-wait tasks make closed-loop load, and achieved request or opportunity rates
+must be measured from the run rather than inferred from user count.
+
+Locust documents zero wait time as immediate task scheduling and response validation
+through `catch_response`; see the official
+[writing a locustfile guide](https://docs.locust.io/en/stable/writing-a-locustfile.html).
+The pinned package and Python requirement are listed on
+[PyPI](https://pypi.org/project/locust/2.46.7/).
+
+## Controlled benchmark matrices
+
+Benchmark matrices use a dedicated `adflow_benchmark` database and the optional
+single-worker API service. The reset command is explicit and refuses every database
+name except `adflow_benchmark`; it drops and recreates that database, so run it only
+when its benchmark history can be discarded. It does not reset `adflow` or
+`adflow_test`.
+
+From `backend/`, reset, migrate and seed the benchmark database using the host URL:
+
+```powershell
+uv run --locked python scripts/reset_benchmark_database.py `
+  --database-url postgresql+psycopg://adflow:adflow@127.0.0.1:5432/adflow_benchmark `
+  --application-database-url postgresql+psycopg://adflow:adflow@127.0.0.1:5432/adflow `
+  --confirm-database adflow_benchmark
+
+$env:ADFLOW_DATABASE_URL = 'postgresql+psycopg://adflow:adflow@127.0.0.1:5432/adflow_benchmark'
+$env:ADFLOW_TEST_DATABASE_URL = 'postgresql+psycopg://adflow:adflow@127.0.0.1:5432/adflow_test'
+uv run --locked alembic upgrade head
+uv run --locked adflow-seed --seed 20261009 --users 100 --advertisers 20 --ads 1000
+```
+
+Start the benchmark API with its service-to-service database URL. The Compose profile
+uses exactly one Uvicorn worker and does not redirect the dashboard or demo API:
+
+```powershell
+$env:ADFLOW_BENCHMARK_DATABASE_URL = 'postgresql+psycopg://adflow:adflow@postgres:5432/adflow_benchmark'
+docker compose --profile benchmark up -d --build benchmark-api
+```
+
+Run from `backend/` with Locust installed in the locked development environment:
+
+```powershell
+uv run --locked python scripts/benchmark_runner.py `
+  --host http://127.0.0.1:18001 `
+  --profile-database-url postgresql+psycopg://adflow:adflow@127.0.0.1:5432/adflow_benchmark `
+  --workload recommendation_only --cache-state warm
+
+uv run --locked python scripts/benchmark_runner.py `
+  --host http://127.0.0.1:18001 `
+  --profile-database-url postgresql+psycopg://adflow:adflow@127.0.0.1:5432/adflow_benchmark `
+  --workload lifecycle --cache-state cold
+```
+
+On a host without Python 3.11 or newer, build the pinned Locust helper image from
+`backend/` and run the same matrix with the host Python environment used by the runner:
+
+```powershell
+docker build -f Dockerfile.locust -t adflow-locust:2.46.7 .
+python scripts/benchmark_runner.py `
+  --host http://127.0.0.1:18001 `
+  --profile-database-url postgresql+psycopg://adflow:adflow@127.0.0.1:5432/adflow_benchmark `
+  --locust-image adflow-locust:2.46.7 `
+  --loadgen-database-url postgresql+psycopg://adflow:adflow@postgres:5432/adflow_benchmark `
+  --loadgen-host http://127.0.0.1:8000 `
+  --workload recommendation_only --cache-state warm
+```
+
+The helper shares the benchmark API's network namespace, so its API URL uses the
+container's port 8000 and its database URL uses the Compose `postgres` service name.
+The runner performs the database and single-worker checks from the host.
+
+After building the Flat and HNSW snapshots for the benchmark dataset, the PowerShell
+matrix driver recreates only `benchmark-api` across full-scan/Flat/HNSW and
+Redis-enabled/disabled configurations. It runs recommendation-only and lifecycle
+workloads with uniform and hot profile access, using warm and targeted cold-cache
+phases where Redis is enabled:
+
+```powershell
+docker exec adflow-postgres-1 psql -U adflow -d postgres -c "CREATE DATABASE adflow_benchmark_template OWNER adflow"
+docker exec -e ADFLOW_DATABASE_URL=postgresql+psycopg://adflow:adflow@postgres:5432/adflow_benchmark_template `
+  -e ADFLOW_TEST_DATABASE_URL=postgresql+psycopg://adflow:adflow@postgres:5432/adflow_test `
+  adflow-benchmark-api /app/.venv/bin/alembic -c /app/alembic.ini upgrade head
+docker exec -e ADFLOW_DATABASE_URL=postgresql+psycopg://adflow:adflow@postgres:5432/adflow_benchmark_template `
+  -e ADFLOW_TEST_DATABASE_URL=postgresql+psycopg://adflow:adflow@postgres:5432/adflow_test `
+  adflow-benchmark-api /app/.venv/bin/python -m app.seeding.cli --seed 4901 --users 1000 --advertisers 20 --ads 1000
+
+.\scripts\run_benchmark_matrix.ps1 -Users 10 -ResetFromTemplate
+```
+
+The driver's short defaults are smoke measurements for checking coverage and failure
+handling. Use `-WarmupSeconds 60 -MeasurementSeconds 180 -DrainSeconds 30 -SpawnRate 10
+-Repetitions 3` for evidence that can support comparative performance claims. Each
+matrix records initial and final benchmark database table counts so later runs expose
+the durable-write state they started with.
+
+`-ResetFromTemplate` stops only the benchmark API and clones `adflow_benchmark_template`
+into `adflow_benchmark` before every workload/access configuration. The reset tool
+requires `--confirm-database adflow_benchmark` and accepts only the exact named
+benchmark template. Never point the template option at an application or test database.
+
+By default, each command runs 10, 100 and 500 users for three repetitions, with a
+10-user-per-second ramp, 60-second post-ramp warm-up, 180-second measurement and
+30-second finite drain. Override `--users` and `--repetitions` for labeled smoke runs.
+Warm mode retains the profile cache populated during warm-up. Cold mode removes only
+the selected benchmark dataset's versioned profile keys after warm-up and immediately
+before measurement; it never flushes the shared Redis database. If Redis is disabled,
+the phase file records that no cache reset was needed.
+
+Each matrix under `artifacts/benchmarks/` retains the exact command, Locust/host/Docker
+versions, API image and resource limits, API capability and dataset IDs, configuration
+hashes, host and container resource snapshots, phase timestamps, per-run JSON summaries,
+Locust CSV/HTML exports, logs, incomplete runs and drain boundaries. Locust statistics
+reset after all configured users finish ramping and the warm-up ends. In-flight work
+drains under the same finite timeout as each request's Locust user. A stopped run is
+marked incomplete if the measurement or drain boundary is missing. These outputs record
+the actual scenario; they do not establish a hardware-independent throughput target.
+The AdFlow JSON counters cover the whole Locust process; the reset Locust CSV/HTML
+statistics and phase timestamps identify the post-warm-up measurement window.
+
+The runner checks that the API container uses the exact benchmark database name and
+that the host profile connection and API expose the same newest dataset before starting.
+The controller uses Locust's `spawning_complete` event to begin warm-up, resets
+statistics at the measurement boundary, then stops users with the configured finite
+task timeout. See the official [Locust runner API](https://docs.locust.io/en/2.46.7/_modules/locust/runners.html)
+and [statistics API](https://docs.locust.io/en/2.46.7/_modules/locust/stats.html).
+
+After a matrix completes, create its per-run report from `backend/`:
+
+```powershell
+uv run --locked python scripts/report_benchmarks.py ../artifacts/benchmarks/<matrix-id>
+```
+
+The report keeps every repetition separate and never averages percentiles. Client
+percentiles are approximate from Locust's response-time histogram. Backend request and
+stage percentiles are nearest-rank over retained samples, but the API exposes them as a
+bounded process-local rolling window. Start/end snapshots can include warm-up, the
+metrics observer calls, earlier requests and drain; they are context, not run-scoped
+server latency. The report includes actual sample/drop coverage and process start time
+so a restart or truncated interval is visible. Workload counter deltas bracket the
+measurement; tasks crossing a boundary are called out in the report.

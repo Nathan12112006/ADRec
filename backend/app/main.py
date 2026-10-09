@@ -14,9 +14,10 @@ from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
 
 from app.api.routes import router
+from app.cache.profiles import RedisProfileCache, create_profile_cache
 from app.core.config import Settings, load_settings
 from app.core.errors import WorkflowError
-from app.core.observability import configure_logging, logger, stages
+from app.core.observability import RollingTelemetry, configure_logging, logger, stages
 from app.ctr.serving import CTRModel, CTRUnavailable
 from app.db.session import Database
 from app.retrieval.snapshots import ActiveSnapshot, SnapshotLoadError
@@ -29,7 +30,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         database = Database(config)
+        profile_cache = create_profile_cache(config)
         app.state.database = database
+        app.state.profile_cache = profile_cache
         try:
             app.state.ctr_model = CTRModel.unavailable()
             if config.ctr_model_path is not None:
@@ -48,12 +51,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     pass
             yield
         finally:
+            profile_cache.close()
             database.dispose()
 
     app = FastAPI(title="AdFlow", version="0.1.0", lifespan=lifespan)
     app.state.settings = config
     app.state.snapshots = ActiveSnapshot()
     app.state.ctr_model = CTRModel.unavailable()
+    app.state.telemetry = RollingTelemetry()
+    app.state.profile_cache = RedisProfileCache(None)
 
     def error_response(request: Request, status: int, code: str, message: str) -> JSONResponse:
         request.state.context["error_code"] = code
@@ -92,15 +98,53 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 response = error_response(request, 500, "internal_error", "Internal server error")
             response.headers["X-Request-ID"] = request_id
             route = request.scope.get("route")
+            route_path = getattr(route, "path", "unmatched")
+            context = request.state.context
+            if response.status_code >= 400:
+                population = "error"
+            elif route_path == "/api/v1/recommendations":
+                population = context.get("outcome", "other")
+            elif route_path == "/api/v1/events/impression":
+                population = "impression"
+            elif route_path == "/api/v1/events/click":
+                population = "click"
+            else:
+                population = "other"
+            experiment_id = context.get("experiment_id")
+            variant = context.get("experiment_variant")
+            attribution = (
+                "assigned"
+                if experiment_id is not None and variant is not None
+                else "unknown"
+                if route_path == "/api/v1/recommendations" and response.status_code >= 400
+                else "outside_experiment"
+                if route_path == "/api/v1/recommendations"
+                else None
+            )
+            duration_ms = (perf_counter() - started) * 1000
+            app.state.telemetry.record(
+                route=route_path,
+                method=request.method,
+                status=response.status_code,
+                duration_ms=duration_ms,
+                population=population,
+                experiment_id=experiment_id,
+                variant=variant,
+                attribution=attribution,
+                error_code=context.get("error_code"),
+                retrieval_mode=context.get("retrieval_mode"),
+                fallback_reason=context.get("fallback_reason"),
+                stages=timings,
+            )
             logger.info(
                 "request",
                 extra={
                     "request_context": {
                         **request.state.context,
                         "method": request.method,
-                        "route": getattr(route, "path", "unmatched"),
+                        "route": route_path,
                         "status": response.status_code,
-                        "duration_ms": (perf_counter() - started) * 1000,
+                        "duration_ms": duration_ms,
                         "stages": timings,
                     }
                 },

@@ -31,7 +31,7 @@ class RankingResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     candidates: tuple[ScoredCandidate, ...]
-    strategy: str
+    strategy: Literal["interest-overlap", "expected-value"]
     strategy_version: str
     score_meaning: Literal[
         "distinct_shared_interest_count", "expected_simulated_dollars_per_impression"

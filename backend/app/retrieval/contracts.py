@@ -59,6 +59,7 @@ class RetrievalResult(BaseModel):
             "incompatible_index",
             "stale_index",
             "insufficient_candidates",
+            "experiment_exact",
         ]
         | None
     ) = None

@@ -3,6 +3,7 @@ import logging
 from collections.abc import Callable, Iterator
 from datetime import datetime, timezone
 from decimal import Decimal
+from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -12,9 +13,11 @@ from sqlalchemy.orm import Session
 
 from app.api import routes
 from app.api.dependencies import get_session
+from app.cache.profiles import RedisProfileCache
 from app.core.config import Settings
 from app.core.errors import WorkflowError
 from app.core.observability import JsonFormatter, logger
+from app.ctr.serving import CTRModel
 from app.main import create_app
 from app.ranking.strategies import RankingStrategy
 from app.retrieval.snapshots import ActiveSnapshot
@@ -115,6 +118,9 @@ def test_recommendation_schema_and_empty_no_ad(
         candidate_limit: int,
         search_limit: int,
         strategy: RankingStrategy,
+        ctr_model: CTRModel,
+        profile_cache: RedisProfileCache,
+        request_context: dict[str, Any] | None,
     ) -> RecommendationResult:
         assert user_id == 1 and request_key == "key"
         return result
@@ -175,6 +181,9 @@ def test_workflow_errors(client: TestClient, monkeypatch: pytest.MonkeyPatch, st
         candidate_limit: int,
         search_limit: int,
         strategy: RankingStrategy,
+        ctr_model: CTRModel,
+        profile_cache: RedisProfileCache,
+        request_context: dict[str, Any] | None,
     ) -> RecommendationResult:
         raise WorkflowError(status, "safe_reason", "Safe message")
 
@@ -214,6 +223,9 @@ def test_safe_failures_and_request_logging(
         candidate_limit: int,
         search_limit: int,
         strategy: RankingStrategy,
+        ctr_model: CTRModel,
+        profile_cache: RedisProfileCache,
+        request_context: dict[str, Any] | None,
     ) -> RecommendationResult:
         if database_failure:
             raise OperationalError("secret SQL", {}, Exception("password=secret"))

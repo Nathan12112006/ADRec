@@ -1,5 +1,6 @@
 *
 !Dockerfile
+!Dockerfile.locust
 !pyproject.toml
 !uv.lock
 !alembic.ini

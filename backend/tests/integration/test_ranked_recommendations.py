@@ -1,8 +1,10 @@
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from decimal import Decimal
+from threading import Event as ThreadEvent
+from threading import Thread
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import numpy as np
 import pytest
@@ -15,8 +17,10 @@ from app.core.config import Settings
 from app.core.errors import WorkflowError
 from app.ctr.serving import CTRModel
 from app.db.session import Database
+from app.experiments.assignment import AssignmentConfig, assign_variant
+from app.experiments.management import transition_experiment
 from app.main import create_app
-from app.models.records import Ad, Advertiser, User
+from app.models.records import Ad, Advertiser, Experiment, Recommendation, RequestOutcome, User
 from app.ranking.strategies import ExpectedValue
 from app.seeding import SeedConfig, seed_database
 from app.services.events import record_event
@@ -171,6 +175,7 @@ def test_http_ctr_failure_is_503_and_retry_can_use_baseline_without_invented_ctr
             headers={"Idempotency-Key": key},
         )
         assert baseline.status_code == 200
+        assert baseline.json()["replayed"] is False
         selected = baseline.json()["selection"]
         assert selected["id"] == inventory.cars_id
         assert selected["strategy"] == "interest-overlap"
@@ -183,14 +188,16 @@ def test_http_ctr_failure_is_503_and_retry_can_use_baseline_without_invented_ctr
         app.state.settings = database_settings.model_copy(
             update={"ranking_strategy": "expected-value"}
         )
-        assert (
-            client.post(
-                "/api/v1/recommendations",
-                json={"user_id": inventory.user_id},
-                headers={"Idempotency-Key": key},
-            ).json()
-            == baseline.json()
+        replay = client.post(
+            "/api/v1/recommendations",
+            json={"user_id": inventory.user_id},
+            headers={"Idempotency-Key": key},
         )
+        assert replay.status_code == 200
+        assert replay.json()["replayed"] is True
+        assert {key: value for key, value in replay.json().items() if key != "replayed"} == {
+            key: value for key, value in baseline.json().items() if key != "replayed"
+        }
     assert len(estimator.batches) == (0 if failure == "unavailable" else 1)
 
 
@@ -268,7 +275,10 @@ def test_http_zero_value_selection_replays_identical_decimal_score_and_model_con
             json={"user_id": inventory.user_id},
             headers={"Idempotency-Key": key},
         )
-        assert replay.json() == first.json()
+        assert first.json()["replayed"] is False and replay.json()["replayed"] is True
+        assert {key: value for key, value in replay.json().items() if key != "replayed"} == {
+            key: value for key, value in first.json().items() if key != "replayed"
+        }
 
 
 @pytest.mark.parametrize(
@@ -387,3 +397,192 @@ def test_http_selects_configured_v2_and_returns_explicit_saved_context(
     assert selected["feature_version"] == "ctr-features-v1"
     assert selected["retrieval"]["requested_count"] == 500
     assert len(estimator.batches) == 1
+
+
+def test_running_experiment_routes_and_replays_immutable_attribution(
+    database: Database, database_settings: Settings, inventory: Inventory
+) -> None:
+    estimator = Estimator()
+    model = CTRModel(estimator, "a" * 64)
+    app = create_app(database_settings)
+
+    def session_dependency() -> Iterator[Session]:
+        with database.session() as session:
+            yield session
+
+    app.dependency_overrides[get_session] = session_dependency
+    app.dependency_overrides[get_ctr_model] = lambda: model
+    with TestClient(app) as client:
+        created = client.post("/api/v1/experiments", json={"name": "Routing comparison"})
+        assert created.status_code == 201
+        experiment_id = created.json()["id"]
+        assert client.post(f"/api/v1/experiments/{experiment_id}/start").status_code == 200
+        key = str(uuid4())
+        rejected = client.post(
+            "/api/v1/recommendations",
+            json={"user_id": inventory.user_id, "experiment_variant": "control"},
+            headers={"Idempotency-Key": key},
+        )
+        assert rejected.status_code == 422
+        response = client.post(
+            "/api/v1/recommendations",
+            json={"user_id": inventory.user_id},
+            headers={"Idempotency-Key": key},
+        )
+        assert response.status_code == 200
+        context = response.json()
+        assert context["experiment_id"] == experiment_id
+        with database.session() as session:
+            experiment = session.get(Experiment, experiment_id)
+            assert experiment is not None
+            expected_variant = assign_variant(
+                inventory.user_id, AssignmentConfig.model_validate(experiment)
+            )
+            saved = session.get(Recommendation, context["recommendation_id"])
+            assert saved is not None
+            assert saved.experiment_id == experiment.id
+            assert saved.experiment_variant == expected_variant
+        strategy = context["selection"]["strategy"]
+        assert strategy == (
+            "interest-overlap" if expected_variant == "control" else "expected-value"
+        )
+        with database.transaction() as session:
+            for ad_id in (inventory.music_id, inventory.cars_id):
+                ad = session.get(Ad, ad_id)
+                assert ad is not None
+                ad.active = False
+        no_ad_key = str(uuid4())
+        no_ad = client.post(
+            "/api/v1/recommendations",
+            json={"user_id": inventory.user_id},
+            headers={"Idempotency-Key": no_ad_key},
+        )
+        assert no_ad.status_code == 204
+        with database.session() as session:
+            no_ad_outcome = session.get(RequestOutcome, no_ad_key)
+            assert no_ad_outcome is not None
+            assert no_ad_outcome.experiment_id == UUID(experiment_id)
+            assert no_ad_outcome.experiment_variant == expected_variant
+        assert client.post(f"/api/v1/experiments/{experiment_id}/stop").status_code == 200
+        replay = client.post(
+            "/api/v1/recommendations",
+            json={"user_id": inventory.user_id},
+            headers={"Idempotency-Key": key},
+        )
+        assert replay.status_code == 200 and replay.json()["replayed"] is True
+        assert {key: value for key, value in replay.json().items() if key != "replayed"} == {
+            key: value for key, value in context.items() if key != "replayed"
+        }
+        no_ad_replay = client.post(
+            "/api/v1/recommendations",
+            json={"user_id": inventory.user_id},
+            headers={"Idempotency-Key": no_ad_key},
+        )
+        assert no_ad_replay.status_code == 204 and no_ad_replay.content == b""
+        event_body = {"recommendation_id": context["recommendation_id"]}
+        assert client.post("/api/v1/events/impression", json=event_body).status_code == 200
+        assert client.post("/api/v1/events/click", json=event_body).status_code == 200
+        telemetry_rows = app.state.telemetry.snapshot()["populations"]
+        populations = {row["population"] for row in telemetry_rows}
+        assert {"selection", "no_ad", "replay", "error", "impression", "click"} <= populations
+        assert any(
+            row["experiment_id"] == experiment_id
+            and row["variant"] == expected_variant
+            and row["population"] == "selection"
+            and row["retrieval_modes"].get("exact_fallback") == 1
+            and row["fallback_reasons"].get("experiment_exact") == 1
+            for row in telemetry_rows
+        )
+    assert len(estimator.batches) == (1 if expected_variant == "treatment" else 0)
+
+
+def test_experiment_model_loss_fails_without_baseline_fallback(
+    database: Database, database_settings: Settings, inventory: Inventory
+) -> None:
+    estimator = Estimator()
+    model = CTRModel(estimator, "b" * 64)
+    app = create_app(database_settings)
+
+    def session_dependency() -> Iterator[Session]:
+        with database.session() as session:
+            yield session
+
+    app.dependency_overrides[get_session] = session_dependency
+    app.dependency_overrides[get_ctr_model] = lambda: model
+    with TestClient(app) as client:
+        created = client.post("/api/v1/experiments", json={"name": "Model loss"})
+        identity = created.json()["id"]
+        assert client.post(f"/api/v1/experiments/{identity}/start").status_code == 200
+        model = CTRModel.unavailable()
+        key = str(uuid4())
+        response = client.post(
+            "/api/v1/recommendations",
+            json={"user_id": inventory.user_id},
+            headers={"Idempotency-Key": key},
+        )
+        assert response.status_code == 503
+        assert response.json()["error"]["code"] == "ctr_unavailable"
+        assert any(
+            row["population"] == "error"
+            and row["experiment_id"] == identity
+            and row["variant"] in ("control", "treatment")
+            for row in app.state.telemetry.snapshot()["populations"]
+        )
+        with database.session() as session:
+            assert session.get(RequestOutcome, key) is None
+        assert client.post(f"/api/v1/experiments/{identity}/stop").status_code == 200
+
+
+def test_stop_waits_for_inflight_recommendation_attribution(
+    database: Database, database_settings: Settings, inventory: Inventory
+) -> None:
+    estimator = Estimator()
+    model = CTRModel(estimator, "c" * 64)
+    app = create_app(database_settings)
+    stop_finished = ThreadEvent()
+    stop_thread: Thread | None = None
+
+    def session_dependency() -> Iterator[Session]:
+        with database.session() as session:
+            yield session
+
+    app.dependency_overrides[get_session] = session_dependency
+    app.dependency_overrides[get_ctr_model] = lambda: model
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/v1/experiments",
+            json={
+                "name": "Stop boundary",
+                "control_strategy": "expected-value",
+                "treatment_strategy": "expected-value",
+            },
+        )
+        identity = UUID(created.json()["id"])
+        assert client.post(f"/api/v1/experiments/{identity}/start").status_code == 200
+
+        def stop_after_selection_lock() -> None:
+            with database.session() as session:
+                transition_experiment(session, identity, "stop", model)
+            stop_finished.set()
+
+        def request_stop_during_inference() -> None:
+            nonlocal stop_thread
+            stop_thread = Thread(target=stop_after_selection_lock)
+            stop_thread.start()
+
+        estimator.on_first_batch = request_stop_during_inference
+        response = client.post(
+            "/api/v1/recommendations",
+            json={"user_id": inventory.user_id},
+            headers={"Idempotency-Key": str(uuid4())},
+        )
+        assert response.status_code == 200
+        assert response.json()["experiment_id"] == str(identity)
+        assert stop_finished.wait(timeout=5)
+        assert stop_thread is not None
+        stop_thread.join(timeout=5)
+    with database.session() as session:
+        experiment = session.get(Experiment, identity)
+        recommendation = session.get(Recommendation, response.json()["recommendation_id"])
+        assert experiment is not None and experiment.status == "stopped"
+        assert recommendation is not None and recommendation.experiment_id == identity

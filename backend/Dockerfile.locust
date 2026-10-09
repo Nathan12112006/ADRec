@@ -1,0 +1,10 @@
+FROM locustio/locust:2.46.7@sha256:8492fcaa6a07314551590f579219204e459d9fdc9dde060843bd2896e7a7259f
+
+# Load-test modules import the app's database models to select a reproducible
+# profile population. Keep these versions aligned with backend/uv.lock.
+RUN python -m pip install --no-cache-dir \
+    pydantic==2.13.5 \
+    pydantic-settings==2.15.0 \
+    psycopg[binary]==3.3.6 \
+    redis==8.1.0 \
+    sqlalchemy==2.0.54

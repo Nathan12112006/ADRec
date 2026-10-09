@@ -15,6 +15,7 @@ from app.api.dependencies import get_database, get_session
 from app.core.clock import utc_now
 from app.core.config import Settings
 from app.core.observability import JsonFormatter, logger
+from app.ctr.serving import CTRModel
 from app.db.session import Database
 from app.main import create_app
 from app.models.records import Event
@@ -60,10 +61,16 @@ def test_http_lifecycle_replay_accounting_and_selection_logs(
         assert response.status_code == 200
         recommendation = RecommendationResponse.model_validate(response.json())
         assert recommendation.selection.predicted_ctr is None
+        assert recommendation.replayed is False
         replay = client.post(
             "/api/v1/recommendations", json={"user_id": user_id}, headers={"Idempotency-Key": key}
         )
-        assert replay.json() == response.json()
+        assert replay.status_code == 200
+        assert replay.json()["replayed"] is True
+        assert response.json()["replayed"] is False
+        replay_body = replay.json()
+        replay_body["replayed"] = False
+        assert replay_body == response.json()
         body = {"recommendation_id": str(recommendation.recommendation_id)}
         assert (
             client.post("/api/v1/events/click", json=body).json()["error"]["code"]
@@ -76,7 +83,16 @@ def test_http_lifecycle_replay_accounting_and_selection_logs(
             assert event.user_id == user_id and event.ad_id == recommendation.selection.id
             assert client.post(f"/api/v1/events/{kind}", json=body).json() == accepted.json()
         assert event.simulated_revenue == recommendation.selection.bid
-        assert client.get("/health/ready").json() == {"status": "ready"}
+        health = client.get("/health/ready").json()
+        assert health["status"] == "ready"
+        assert health["dependencies"] == {"database": "ready", "redis": "disabled"}
+        assert health["capabilities"] == {
+            "retrieval": "exact_fallback",
+            "retrieval_failure": None,
+            "ranking_v1": True,
+            "ranking_v2": False,
+            "ctr_model_id": None,
+        }
     finally:
         logger.removeHandler(handler)
     with database.session() as session:
@@ -106,6 +122,58 @@ def test_http_lifecycle_replay_accounting_and_selection_logs(
     assert logs[-1]["stages"]["database_probe_ms"] >= 0
     assert "user_id" not in logs[-1] and "recommendation_id" not in logs[-1]
     assert key not in output.getvalue()
+
+
+def test_experiment_management_transitions_and_validation(
+    database: Database, database_settings: Settings
+) -> None:
+    app = create_app(database_settings)
+
+    def session() -> Iterator[Session]:
+        with database.session() as value:
+            yield value
+
+    app.dependency_overrides[get_session] = session
+    app.dependency_overrides[get_database] = lambda: database
+    with TestClient(app) as client:
+        app.state.ctr_model = CTRModel(None, "a" * 64)
+        created = client.post("/api/v1/experiments", json={"name": "Demo comparison"})
+        assert created.status_code == 201
+        identity = created.json()["id"]
+        assert created.json()["status"] == "draft"
+        assert client.get("/api/v1/experiments").json()[0]["id"] == identity
+        assert client.post(f"/api/v1/experiments/{identity}/start").json()["status"] == "running"
+        second = client.post("/api/v1/experiments", json={"name": "Second comparison"})
+        conflict = client.post(f"/api/v1/experiments/{second.json()['id']}/start")
+        assert conflict.status_code == 409
+        assert client.post(f"/api/v1/experiments/{identity}/stop").json()["status"] == "stopped"
+        assert client.post(f"/api/v1/experiments/{identity}/start").status_code == 409
+        assert client.post(f"/api/v1/experiments/{uuid4()}/start").status_code == 404
+        assert (
+            client.post("/api/v1/experiments", json={"name": "bad", "unknown": True}).status_code
+            == 422
+        )
+
+
+def test_experiment_activation_requires_pinned_ctr_model(
+    database: Database, database_settings: Settings
+) -> None:
+    app = create_app(database_settings)
+
+    def session() -> Iterator[Session]:
+        with database.session() as value:
+            yield value
+
+    app.dependency_overrides[get_session] = session
+    app.dependency_overrides[get_database] = lambda: database
+    with TestClient(app) as client:
+        app.state.ctr_model = CTRModel(None, "b" * 64)
+        created = client.post("/api/v1/experiments", json={"name": "Pinned model"})
+        assert created.status_code == 201
+        app.state.ctr_model = CTRModel.unavailable()
+        unavailable = client.post(f"/api/v1/experiments/{created.json()['id']}/start")
+        assert unavailable.status_code == 409
+        assert unavailable.json()["error"]["code"] == "model_unavailable"
 
 
 def test_http_no_ad_and_identity_errors(database: Database, client: TestClient) -> None:

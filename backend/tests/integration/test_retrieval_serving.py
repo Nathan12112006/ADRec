@@ -91,7 +91,10 @@ def test_http_uses_configured_index_and_limit_and_replays_saved_context(
         replay = client.post(
             "/api/v1/recommendations", json={"user_id": user_id}, headers={"Idempotency-Key": key}
         )
-        assert replay.json() == response.json()
+        assert response.json()["replayed"] is False and replay.json()["replayed"] is True
+        assert {field: value for field, value in replay.json().items() if field != "replayed"} == {
+            field: value for field, value in response.json().items() if field != "replayed"
+        }
     with database.session() as session:
         saved = session.get(Recommendation, response.json()["recommendation_id"])
         assert saved is not None

@@ -1,12 +1,12 @@
 # 35 — Integrate cache fallback and post-commit invalidation
 
 Status: ready-for-agent
-State: open
+State: done
 Type: task
 Kind: implementation
 Phase: 6 — Redis
 Parent: [AdFlow implementation backlog](../spec.md)
-Assignee: unassigned
+Assignee: Codex
 Blocked by: 33, 34
 
 ## Scope
@@ -29,10 +29,14 @@ The resolved answers above are authoritative, including edge cases not repeated 
 
 ## Acceptance criteria
 
-- [ ] Commit profile changes before invalidation; document the accepted stale-repopulation race.
-- [ ] Dataset replacement pauses traffic and changes the cache namespace; no public profile-edit API is introduced.
-- [ ] Integration tests prove Redis outage preserves valid requests and database outage still returns 503.
+- [x] Commit profile changes before invalidation; document the accepted stale-repopulation race.
+- [x] Dataset replacement pauses traffic and changes the cache namespace; no public profile-edit API is introduced.
+- [x] Integration tests prove Redis outage preserves valid requests and database outage still returns 503.
 
 ## Comments
 
 Created on 2026-10-07 from the accepted implementation handoff. No implementation, verification or human exercise is claimed complete.
+
+Implemented dataset-scoped profile cache-aside in recommendation serving. PostgreSQL supplies the dataset ID and remains authoritative; Redis hits provide only profile fields, while misses/read failures fall through to PostgreSQL. Added an internal profile-update service that commits before best-effort invalidation; no public edit route exists. README documents the accepted stale-repopulation race (maximum TTL 60 seconds) and pausing traffic/changing dataset ID for replacement.
+
+Verification from `backend/` using isolated `adflow_gate33_test` (application URL `adflow_gate33_app`): `ADFLOW_RUN_POSTGRES_TESTS=1 python -m pytest tests/unit/test_profile_cache.py tests/unit/test_config.py tests/integration/test_profile_cache_serving.py tests/integration/test_http_lifecycle.py::test_real_database_unavailability_returns_safe_failures` — 44 passed. `python -m ruff check .`, `python -m ruff format --check .`, and `python -m mypy` — passed (114 source files). Redis outage integration confirms a valid request and durable replay; database outage returns 503. An initial assertion assumed a refused local Redis socket would be classified as a generic read error; redis-py observed the configured connect timeout, so the assertion now checks the documented timeout classification. Test fixtures append uniquely identified data; existing database history was preserved.

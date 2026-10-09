@@ -1,12 +1,12 @@
 # 42 — Build experiment list and comparison detail views
 
 Status: ready-for-agent
-State: open
+State: done
 Type: task
 Kind: implementation
 Phase: 7 — Dashboard
 Parent: [AdFlow implementation backlog](../spec.md)
-Assignee: unassigned
+Assignee: Codex
 Blocked by: 38, 40
 
 ## Scope
@@ -29,10 +29,14 @@ The resolved answers above are authoritative, including edge cases not repeated 
 
 ## Acceptance criteria
 
-- [ ] Show cohort cutoff/as-of/provisional status and null lift when control is zero.
-- [ ] Include relevant failure/replay/fallback diagnostics without excluding failed treatment attempts.
-- [ ] No browser management controls, significance, winner or rollout claims.
+- [x] Show cohort cutoff/as-of/provisional status and null lift when control is zero.
+- [x] Include relevant failure/replay/fallback diagnostics without excluding failed treatment attempts.
+- [x] No browser management controls, significance, winner or rollout claims.
 
 ## Comments
 
 Created on 2026-10-07 from the accepted implementation handoff. No implementation, verification or human exercise is claimed complete.
+
+Implemented the responsive, read-only experiment list and detail in `frontend/src/Experiments.tsx`, styled in `frontend/src/App.css`, using the existing experiment API types and polling hook. The view shows status/configuration, cohort start and exclusive cutoff, as-of time, provisional maturity, control/treatment outcomes, full comparison including lift, fallback counts, no-ad/replay/failure telemetry and coverage gaps. Missing/zero control values display null lift as an em dash. Unknown attribution errors remain explicitly unassigned. No significance test, winner, rollout language or management controls are present.
+
+Verification (2026-10-08; API sample timestamps reflect the DB clock): `npm run build` (pass; TypeScript and Vite production build), `npm run lint` (pass, no diagnostics), GET `/api/v1/experiments` and selected GET `/api/v1/experiments/{id}/results` through Uvicorn on `127.0.0.1:8001` (pass; 1 experiment, 100 durable attempts split 65/35, 100 recommendations and impressions, 8 clicks, simulated revenue 23.0600/14.5900, cohort cutoff/as-of/provisional and fallback data present), Vite dashboard route HTTP 200 on `127.0.0.1:5173`. Data is synthetic and telemetry coverage was incomplete; this run confirms response shape and available render inputs, not statistical conclusions. An initial build ran out of Node memory under the default environment; rerun with `NODE_OPTIONS=--max-old-space-size=2048` succeeded. No browser screenshot was captured because the app preview transport was unavailable in this environment.

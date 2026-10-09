@@ -53,6 +53,30 @@ def test_retrieval_limits_load_from_environment_without_changing_their_meaning(
     assert settings.retrieval_search_limit == 250
 
 
+def test_empty_redis_environment_disables_the_optional_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ADFLOW_DATABASE_URL", APP_URL)
+    monkeypatch.setenv("ADFLOW_TEST_DATABASE_URL", TEST_URL)
+    monkeypatch.setenv("ADFLOW_REDIS_URL", "")
+
+    settings = load_settings(env_file=None)
+
+    assert settings.redis_url is None
+
+
+def test_disabled_redis_environment_sentinel_disables_the_optional_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ADFLOW_DATABASE_URL", APP_URL)
+    monkeypatch.setenv("ADFLOW_TEST_DATABASE_URL", TEST_URL)
+    monkeypatch.setenv("ADFLOW_REDIS_URL", "disabled")
+
+    settings = load_settings(env_file=None)
+
+    assert settings.redis_url is None
+
+
 def test_missing_database_settings_are_reported_without_values(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

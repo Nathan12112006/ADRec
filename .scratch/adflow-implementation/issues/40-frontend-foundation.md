@@ -1,12 +1,12 @@
 # 40 — Create the React dashboard shell and reliable polling
 
 Status: ready-for-agent
-State: open
+State: done
 Type: task
 Kind: implementation
 Phase: 7 — Dashboard
 Parent: [AdFlow implementation backlog](../spec.md)
-Assignee: unassigned
+Assignee: Codex
 Blocked by: 38, 39
 
 ## Scope
@@ -28,10 +28,12 @@ The resolved answers above are authoritative, including edge cases not repeated 
 
 ## Acceptance criteria
 
-- [ ] Pause polling while hidden and prevent overlapping requests.
-- [ ] Retain last good data on failures and show stale/failed status clearly.
-- [ ] Provide keyboard navigation, labeled controls and a usable narrow-screen layout.
+- [x] Pause polling while hidden and prevent overlapping requests.
+- [x] Retain last good data on failures and show stale/failed status clearly.
+- [x] Provide keyboard navigation, labeled controls and a usable narrow-screen layout.
 
 ## Comments
 
 Created on 2026-10-07 from the accepted implementation handoff. No implementation, verification or human exercise is claimed complete.
+
+Created the React/TypeScript/Vite application, pinned `package-lock.json`, backend API proxy, typed API client, shared page shell, responsive navigation/layout, and reusable loading/empty/error/stale UI. `usePolling` requests immediately then schedules each next request five seconds after completion, uses an in-flight guard, aborts on hidden/pause/unmount, exposes manual refresh, and retains last successful data on failure. Keyboard-focus styling, semantic navigation, labeled buttons, status announcements, and reduced-motion handling are included. Commands: `npm run build` and `npm run lint` from `frontend/` both pass with no diagnostics. Browser behavior is scheduled for the dashboard phase walkthrough after the real views are complete.

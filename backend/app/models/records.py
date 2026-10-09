@@ -3,7 +3,7 @@
 from datetime import datetime
 from decimal import Decimal
 from secrets import token_hex
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -111,6 +111,18 @@ class Recommendation(Base):
         UniqueConstraint("id", "user_id", name="recommendation_user_identity"),
         CheckConstraint("bid >= 0 AND bid <> 'NaN'::numeric", name="selection_nonnegative_bid"),
         CheckConstraint("jsonb_typeof(selected_ad) = 'object'", name="selection_snapshot_object"),
+        CheckConstraint(
+            "(experiment_id IS NULL AND experiment_variant IS NULL) OR "
+            "(experiment_id IS NOT NULL AND experiment_variant IS NOT NULL AND "
+            "experiment_variant IN ('control','treatment'))",
+            name="recommendation_experiment_attribution",
+        ),
+        Index(
+            "recommendations_experiment_cohort",
+            "experiment_id",
+            "created_at",
+            postgresql_where=text("experiment_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
@@ -119,6 +131,8 @@ class Recommendation(Base):
     ad_id: Mapped[int] = mapped_column(BigInteger, index=True)
     bid: Mapped[Decimal] = mapped_column(Numeric(12, 4))
     selected_ad: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    experiment_id: Mapped[UUID | None] = mapped_column()
+    experiment_variant: Mapped[Literal["control", "treatment"] | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
@@ -132,11 +146,19 @@ class RequestOutcome(Base):
         ),
         UniqueConstraint("recommendation_id", name="one_outcome_per_recommendation"),
         CheckConstraint("length(request_key) BETWEEN 1 AND 255", name="bounded_request_key"),
+        CheckConstraint(
+            "(experiment_id IS NULL AND experiment_variant IS NULL) OR "
+            "(experiment_id IS NOT NULL AND experiment_variant IS NOT NULL AND "
+            "experiment_variant IN ('control','treatment'))",
+            name="outcome_experiment_attribution",
+        ),
     )
 
     request_key: Mapped[str] = mapped_column(Text, primary_key=True)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), index=True)
     recommendation_id: Mapped[UUID | None] = mapped_column()
+    experiment_id: Mapped[UUID | None] = mapped_column()
+    experiment_variant: Mapped[Literal["control", "treatment"] | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

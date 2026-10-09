@@ -28,6 +28,7 @@ class CurrentCandidateRetriever:
         *,
         search_limit: int = 4000,
         ef_search: int | None = None,
+        force_exact: bool = False,
     ) -> None:
         if type(search_limit) is not int or not 1 <= search_limit <= MAX_SEARCH_LIMIT:
             raise ValueError("search limit must be a positive integer within the expansion bound")
@@ -39,6 +40,7 @@ class CurrentCandidateRetriever:
         ):
             raise ValueError("ef_search must be a positive integer within the search bound")
         self._ef_search = ef_search
+        self._force_exact = force_exact
 
     def retrieve(self, user: RetrievalUser, limit: int = 500) -> RetrievalResult:
         start = perf_counter()
@@ -82,8 +84,10 @@ class CurrentCandidateRetriever:
                 )
                 fallback_ms = (perf_counter() - fallback_start) * 1000
             else:
-                snapshot = state.snapshot
-                if state.failure_reason is not None:
+                snapshot = None if self._force_exact else state.snapshot
+                if self._force_exact:
+                    reason = "experiment_exact"
+                if state.failure_reason is not None and not self._force_exact:
                     reason = state.failure_reason
                     snapshot = None
                 candidates = ()

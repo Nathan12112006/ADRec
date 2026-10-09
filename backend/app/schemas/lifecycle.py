@@ -22,6 +22,9 @@ class RecommendationResponse(BaseModel):
     recommendation_id: UUID
     user_id: int
     created_at: datetime
+    replayed: bool = False
+    experiment_id: UUID | None = None
+    experiment_variant: str | None = None
     selection: AdSelection
 
 
@@ -32,6 +35,8 @@ class EventResponse(BaseModel):
     ad_id: int
     created_at: datetime
     simulated_revenue: Decimal
+    experiment_id: UUID | None = None
+    experiment_variant: str | None = None
 
 
 class ErrorDetail(BaseModel):

@@ -2,10 +2,10 @@
 
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from psycopg.errors import UniqueViolation
@@ -14,11 +14,17 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.cache.profiles import CachedUserProfile, RedisProfileCache
 from app.core.clock import utc_now
 from app.core.errors import WorkflowError
 from app.core.observability import stage, stages
-from app.models.records import Ad, Advertiser, Recommendation, RequestOutcome, User
-from app.ranking.strategies import InterestOverlap, RankingStrategy
+from app.ctr.features import FEATURE_VERSION
+from app.ctr.serving import CTRModel, CTRUnavailable
+from app.ctr.training import MODEL_VERSION
+from app.experiments.assignment import AssignmentConfig, assign_variant
+from app.experiments.management import lock_experiment_routing
+from app.models.records import Ad, Advertiser, Experiment, Recommendation, RequestOutcome, User
+from app.ranking.strategies import ExpectedValue, InterestOverlap, RankingStrategy
 from app.retrieval.contracts import RetrievalResult, RetrievalUser
 from app.retrieval.current import CurrentCandidateRetriever
 from app.retrieval.limits import DEFAULT_CANDIDATE_LIMIT, CandidateLimit
@@ -37,7 +43,18 @@ class RetrievalContext(BaseModel):
     vector_version: str
     requested_count: CandidateLimit
     returned_count: int = Field(ge=0, le=500)
-    fallback_reason: str | None
+    fallback_reason: (
+        Literal[
+            "empty_interests",
+            "missing_index",
+            "corrupt_index",
+            "incompatible_index",
+            "stale_index",
+            "insufficient_candidates",
+            "experiment_exact",
+        ]
+        | None
+    )
     elapsed_ms: float = Field(ge=0)
     vector_elapsed_ms: float = Field(ge=0)
     metadata_elapsed_ms: float = Field(ge=0)
@@ -82,6 +99,10 @@ class RecommendationResult:
     created_at: datetime
     recommendation_id: UUID | None
     selection: AdSelection | None
+    experiment_id: UUID | None = None
+    experiment_variant: Literal["control", "treatment"] | None = None
+    replayed: bool = field(default=False, compare=False)
+    retrieval: RetrievalContext | None = field(default=None, compare=False)
 
 
 class _InventoryChanged(Exception):
@@ -107,6 +128,9 @@ def _create_or_replay(
     candidate_limit: int,
     search_limit: int,
     strategy: RankingStrategy,
+    ctr_model: CTRModel | None,
+    profile_cache: RedisProfileCache | None,
+    request_context: dict[str, Any] | None,
 ) -> RecommendationResult:
     """Own the transaction; return only after both records have committed."""
     with _transaction(session):
@@ -122,29 +146,156 @@ def _create_or_replay(
                     410, "request_key_expired", "Request key has expired; use a new key"
                 )
             if outcome.recommendation_id is None:
-                return RecommendationResult(outcome.user_id, outcome.created_at, None, None)
+                if request_context is not None:
+                    request_context.update(
+                        experiment_id=(
+                            str(outcome.experiment_id) if outcome.experiment_id else None
+                        ),
+                        experiment_variant=outcome.experiment_variant,
+                    )
+                return RecommendationResult(
+                    outcome.user_id,
+                    outcome.created_at,
+                    None,
+                    None,
+                    outcome.experiment_id,
+                    outcome.experiment_variant,
+                    True,
+                )
             with stage("database_ms"):
                 saved = session.get(Recommendation, outcome.recommendation_id)
             assert saved is not None
+            if request_context is not None:
+                request_context.update(
+                    experiment_id=(str(saved.experiment_id) if saved.experiment_id else None),
+                    experiment_variant=saved.experiment_variant,
+                )
             return RecommendationResult(
                 outcome.user_id,
                 outcome.created_at,
                 saved.id,
                 AdSelection.model_validate(saved.selected_ad),
+                saved.experiment_id,
+                saved.experiment_variant,
+                True,
             )
-        with stage("database_ms"):
-            user = session.scalar(select(User).where(User.id == user_id).with_for_update(read=True))
-        if user is None:
-            raise WorkflowError(404, "unknown_user", "Synthetic user was not found")
+        lock_experiment_routing(session, exclusive=False)
+        experiment = session.scalar(
+            select(Experiment).where(Experiment.status == "running").with_for_update(read=True)
+        )
+        if profile_cache is None or not profile_cache.enabled:
+            with stage("database_ms"):
+                user = session.scalar(
+                    select(User).where(User.id == user_id).with_for_update(read=True)
+                )
+            if user is None:
+                raise WorkflowError(404, "unknown_user", "Synthetic user was not found")
+            profile = CachedUserProfile(
+                dataset_id=user.dataset_id,
+                user_id=user.id,
+                interests=tuple(user.interests),
+                category_preferences=tuple(user.category_preferences),
+                age_group=user.age_group,
+                country=user.country,
+                device=user.device,
+            )
+        else:
+            with stage("database_ms"):
+                dataset_id = session.scalar(
+                    select(User.dataset_id).where(User.id == user_id).with_for_update(read=True)
+                )
+            if dataset_id is None:
+                raise WorkflowError(404, "unknown_user", "Synthetic user was not found")
+
+            def load_profile() -> CachedUserProfile | None:
+                with stage("database_ms"):
+                    user = session.scalar(
+                        select(User)
+                        .where(User.id == user_id, User.dataset_id == dataset_id)
+                        .with_for_update(read=True)
+                    )
+                if user is None:
+                    return None
+                return CachedUserProfile(
+                    dataset_id=user.dataset_id,
+                    user_id=user.id,
+                    interests=tuple(user.interests),
+                    category_preferences=tuple(user.category_preferences),
+                    age_group=user.age_group,
+                    country=user.country,
+                    device=user.device,
+                )
+
+            lookup = profile_cache.get_or_load(dataset_id, user_id, load_profile)
+            cached_profile = lookup.profile
+            if cached_profile is None:
+                raise WorkflowError(404, "unknown_user", "Synthetic user was not found")
+            profile = cached_profile
+        experiment_id: UUID | None = None
+        experiment_variant: Literal["control", "treatment"] | None = None
+        active_strategy = strategy
+        active_candidate_limit = candidate_limit
+        active_search_limit = search_limit
+        active_ef_search: int | None = None
+        force_exact = False
+        if experiment is not None:
+            experiment_id = experiment.id
+            experiment_variant = assign_variant(
+                user_id, AssignmentConfig.model_validate(experiment)
+            )
+        if request_context is not None:
+            request_context.update(
+                experiment_id=(str(experiment_id) if experiment_id else None),
+                experiment_variant=experiment_variant,
+            )
+        if experiment is not None:
+            selected_strategy = (
+                experiment.control_strategy
+                if experiment_variant == "control"
+                else experiment.treatment_strategy
+            )
+            if (
+                ctr_model is None
+                or ctr_model.model_id != experiment.model_id
+                or MODEL_VERSION != experiment.model_version
+                or FEATURE_VERSION != experiment.feature_version
+            ):
+                raise CTRUnavailable()
+            active_strategy = (
+                ExpectedValue(ctr_model)
+                if selected_strategy == "expected-value"
+                else InterestOverlap()
+            )
+            active_candidate_limit = experiment.candidate_limit
+            active_search_limit = experiment.search_limit
+            if experiment.retrieval_mode == "exact":
+                force_exact = True
+            else:
+                snapshot = snapshots.status().snapshot
+                if snapshot is None or snapshot.manifest.hnsw is None:
+                    force_exact = True
+                else:
+                    active_ef_search = experiment.hnsw_ef_search
         with stage("selection_ms"):
             retrieved = CurrentCandidateRetriever(
-                session, snapshots, search_limit=search_limit
+                session,
+                snapshots,
+                search_limit=active_search_limit,
+                ef_search=active_ef_search,
+                force_exact=force_exact,
             ).retrieve(
                 RetrievalUser(
-                    id=user.id, dataset_id=user.dataset_id, interests=tuple(user.interests)
+                    id=profile.user_id,
+                    dataset_id=profile.dataset_id,
+                    interests=profile.interests,
                 ),
-                limit=candidate_limit,
+                limit=active_candidate_limit,
             )
+            if request_context is not None:
+                request_context.update(
+                    retrieval_mode=retrieved.mode,
+                    fallback_reason=retrieved.fallback_reason,
+                )
             timings = stages.get()
             if timings is not None:
                 for name, value in (
@@ -155,11 +306,11 @@ def _create_or_replay(
                 ):
                     timings[name] = timings.get(name, 0.0) + value
             with stage("ranking_ms"):
-                ranking = strategy.rank(
+                ranking = active_strategy.rank(
                     {
-                        "interests": tuple(user.interests),
-                        "device": user.device,
-                        "age_group": user.age_group,
+                        "interests": profile.interests,
+                        "device": profile.device,
+                        "age_group": profile.age_group,
                     },
                     [ad.model_dump() for ad in retrieved.candidates],
                 )
@@ -167,16 +318,30 @@ def _create_or_replay(
         if candidate is None:
             created_at = clock()
             session.add(
-                RequestOutcome(request_key=request_key, user_id=user_id, created_at=created_at)
+                RequestOutcome(
+                    request_key=request_key,
+                    user_id=user_id,
+                    experiment_id=experiment_id,
+                    experiment_variant=experiment_variant,
+                    created_at=created_at,
+                )
             )
-            return RecommendationResult(user_id, created_at, None, None)
+            return RecommendationResult(
+                user_id,
+                created_at,
+                None,
+                None,
+                experiment_id,
+                experiment_variant,
+                retrieval=RetrievalContext.from_result(retrieved),
+            )
         with stage("database_ms"):
             ad = session.scalar(
                 select(Ad)
                 .join(Advertiser, Ad.advertiser_id == Advertiser.id)
                 .where(
                     Ad.id == candidate.ad_id,
-                    Ad.dataset_id == user.dataset_id,
+                    Ad.dataset_id == profile.dataset_id,
                     Ad.active.is_(True),
                     Advertiser.active.is_(True),
                 )
@@ -214,11 +379,13 @@ def _create_or_replay(
         )
         created_at = clock()
         recommendation = Recommendation(
-            dataset_id=user.dataset_id,
+            dataset_id=profile.dataset_id,
             user_id=user_id,
             ad_id=ad.id,
             bid=selection.bid,
             selected_ad=selection.model_dump(mode="json"),
+            experiment_id=experiment_id,
+            experiment_variant=experiment_variant,
             created_at=created_at,
         )
         session.add(recommendation)
@@ -229,10 +396,19 @@ def _create_or_replay(
                 request_key=request_key,
                 user_id=user_id,
                 recommendation_id=recommendation.id,
+                experiment_id=experiment_id,
+                experiment_variant=experiment_variant,
                 created_at=created_at,
             )
         )
-        result = RecommendationResult(user_id, created_at, recommendation.id, selection)
+        result = RecommendationResult(
+            user_id,
+            created_at,
+            recommendation.id,
+            selection,
+            experiment_id,
+            experiment_variant,
+        )
     return result
 
 
@@ -246,6 +422,9 @@ def recommend(
     candidate_limit: int = DEFAULT_CANDIDATE_LIMIT,
     search_limit: int = 4000,
     strategy: RankingStrategy | None = None,
+    ctr_model: CTRModel | None = None,
+    profile_cache: RedisProfileCache | None = None,
+    request_context: dict[str, Any] | None = None,
 ) -> RecommendationResult:
     """Commit a new opportunity or replay its saved outcome after a racing writer."""
     if not request_key.strip() or len(request_key) > 255:
@@ -269,6 +448,9 @@ def recommend(
                     candidate_limit=candidate_limit,
                     search_limit=search_limit,
                     strategy=ranking_strategy,
+                    ctr_model=ctr_model,
+                    profile_cache=profile_cache,
+                    request_context=request_context,
                 )
             except _InventoryChanged:
                 continue
@@ -288,6 +470,9 @@ def recommend(
                         candidate_limit=candidate_limit,
                         search_limit=search_limit,
                         strategy=ranking_strategy,
+                        ctr_model=ctr_model,
+                        profile_cache=profile_cache,
+                        request_context=request_context,
                     )
                 raise
         raise WorkflowError(

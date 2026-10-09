@@ -1,12 +1,12 @@
 # 53 — Finish reviewer documentation, diagrams and real screenshots
 
 Status: ready-for-agent
-State: open
+State: done
 Type: task
 Kind: implementation
 Phase: 9 — Final polish
 Parent: [AdFlow implementation backlog](../spec.md)
-Assignee: unassigned
+Assignee: Codex
 Blocked by: 51, 52
 
 ## Scope
@@ -37,3 +37,22 @@ The resolved answers above are authoritative, including edge cases not repeated 
 ## Comments
 
 Created on 2026-10-07 from the accepted implementation handoff. No implementation, verification or human exercise is claimed complete.
+
+### Reviewer documentation and screenshots — 2026-10-09
+
+Added the architecture flow diagram, explicit PostgreSQL/Redis/artifact responsibilities,
+small-demo versus full-evidence dataset choices, and links to ticket 16 retrieval evidence,
+ticket 18 synthetic-history evidence, ticket 49 HTTP smoke matrix and ticket 51's measured
+limitations. README now embeds three screenshots captured from the running Docker dashboard:
+`docs/images/dashboard-overview.png`, `docs/images/dashboard-experiments.png` and
+`docs/images/dashboard-performance.png`. The screenshot captions state that the data is
+synthetic; the experiment view is descriptive/provisional and performance has partial
+rolling-window coverage.
+
+The README already documents lifecycle transaction/idempotency rules in HTTP lifecycle,
+exact retrieval and stale/ineligible fallback in candidate retrieval, the five shared CTR
+features and chronological splits, recommendation-cohort experiment results and attribution,
+and Redis fallback/expiry/degraded behavior. Docker-only local delivery, the one-worker
+measurement setup, failed HNSW promotion and deferred product scope remain explicit. No
+real-advertising effectiveness, statistically significant winner, universal performance
+target or public hosting claim was added.

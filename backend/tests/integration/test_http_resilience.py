@@ -138,7 +138,15 @@ def test_request_key_expires_at_exactly_24_hours(
     clock.now = NOW + timedelta(hours=24, microseconds=offset)
     replay = client.post("/api/v1/recommendations", json=body, headers={"Idempotency-Key": key})
     if offset < 0:
-        assert replay.status_code == saved.status_code and replay.content == saved.content
+        assert replay.status_code == saved.status_code
+        if saved.status_code == 200:
+            assert saved.json()["replayed"] is False
+            assert replay.json()["replayed"] is True
+            assert {k: v for k, v in replay.json().items() if k != "replayed"} == {
+                k: v for k, v in saved.json().items() if k != "replayed"
+            }
+        else:
+            assert replay.content == saved.content
     else:
         assert replay.status_code == 410
         assert replay.json()["error"]["code"] == "request_key_expired"
@@ -343,7 +351,16 @@ def test_racing_request_keys_create_one_outcome(
         ),
     )
     assert [response.status_code for response in responses] == [204 if no_ad else 200] * 4
-    assert all(response.content == responses[0].content for response in responses)
+    if no_ad:
+        assert all(response.content == b"" for response in responses)
+    else:
+        payloads = [response.json() for response in responses]
+        assert sorted(payload["replayed"] for payload in payloads) == [False, True, True, True]
+        stable_payloads = [
+            {key: value for key, value in payload.items() if key != "replayed"}
+            for payload in payloads
+        ]
+        assert all(payload == stable_payloads[0] for payload in stable_payloads)
     with database.session() as session:
         assert (
             session.scalar(
@@ -376,7 +393,10 @@ def test_racing_different_users_cannot_share_a_request_key(
     )
     assert sorted(response.status_code for response in responses) == [200, 200, 409, 409]
     winners = [response.json() for response in responses if response.status_code == 200]
-    assert winners[0] == winners[1]
+    assert sorted(winner["replayed"] for winner in winners) == [False, True]
+    assert {key: value for key, value in winners[0].items() if key != "replayed"} == {
+        key: value for key, value in winners[1].items() if key != "replayed"
+    }
     with database.session() as session:
         outcome = session.get(RequestOutcome, key)
         assert outcome is not None and outcome.user_id == winners[0]["user_id"]
@@ -495,7 +515,15 @@ def test_failed_insert_or_commit_returns_503_without_acceptance_then_retry_succe
             json={"user_id": inventory.user_id},
             headers={"Idempotency-Key": key},
         )
-        assert replay.status_code == retry.status_code and replay.content == retry.content
+        assert replay.status_code == retry.status_code
+        if retry.status_code == 200:
+            assert retry.json()["replayed"] is False
+            assert replay.json()["replayed"] is True
+            assert {
+                field: value for field, value in replay.json().items() if field != "replayed"
+            } == {field: value for field, value in retry.json().items() if field != "replayed"}
+        else:
+            assert replay.content == retry.content
     else:
         selected = client.post(
             "/api/v1/recommendations",
