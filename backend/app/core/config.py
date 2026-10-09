@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     retrieval_search_limit: int = Field(default=4000, ge=1, le=MAX_SEARCH_LIMIT)
     retrieval_index_path: Path | None = None
     ctr_model_path: Path | None = None
+    ranking_strategy: Literal["interest-overlap", "expected-value"] = "interest-overlap"
 
     @field_validator("retrieval_index_path", "ctr_model_path", mode="before")
     @classmethod

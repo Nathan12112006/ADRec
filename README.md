@@ -1069,8 +1069,9 @@ work, even without an available model; they do not call the pipeline.
 Nonempty requests requiring the adapter raise typed `CTRUnavailable`, a
 `WorkflowError` with HTTP status 503/code `ctr_unavailable`, for model load or
 inference/output failures. The API's existing error handler provides a safe message
-without internal paths or exception details. The current recommendation API still
-uses the baseline; Phase 4 adds ranking strategies and CTR-dependent routes.
+without internal paths or exception details. The recommendation API defaults to
+V1; configure `ADFLOW_RANKING_STRATEGY=expected-value` to require CTR for new
+nonempty opportunities using the prepared process-resident model.
 No baseline substitution or invented probabilities occur inside the CTR adapter.
 Successful loaded adapters remain resident if their source files are removed;
 source changes affect only a later startup/load.
@@ -1140,11 +1141,71 @@ and intersections. Full deterministic ordering is O(C log C); selecting only a
 maximum could be O(C). V2 adds feature preparation and dense prediction O(C*F) for
 F encoded features, with sparse encoding changing practical cost. Inference and
 sorting remain outside API handlers. No observed CTR/revenue lift is guaranteed.
-Ticket 25 owns wiring these strategies into recommendation persistence and responses.
+The recommendation workflow uses these strategies as described below.
 
 ```powershell
 # From backend/:
 uv run --locked pytest tests/unit/test_ranking_strategies.py tests/unit/test_baseline.py tests/unit/test_ctr_serving.py
+```
+
+## Coherent ranked recommendations and replay
+
+`ADFLOW_RANKING_STRATEGY` selects the server's default ranking strategy for new
+opportunities: `interest-overlap` (default V1) or `expected-value` (V2). Unknown
+values fail settings validation. The request body remains `{"user_id": ...}` with
+the existing `Idempotency-Key` header. This is explicit server configuration;
+experiment assignment/routing remains later work.
+
+For native V2 serving, prepare a compatible bundle as documented above, set:
+
+```dotenv
+ADFLOW_RANKING_STRATEGY=expected-value
+ADFLOW_CTR_MODEL_PATH=C:/Project/AD Rec/artifacts/ctr-serving-demo
+```
+
+Then restart the backend. For Docker, prepare the bundle inside the image runtime,
+use `/artifacts/ctr-serving-demo` in the existing volume and recreate the backend.
+Set `ADFLOW_RANKING_STRATEGY=interest-overlap` to serve new V1 opportunities without
+a model. Both strategies use the same configured candidate limit/retrieval path.
+No automatic training or artifact replacement happens during requests/startup.
+
+The workflow supplies locked user context and detached candidate snapshots to the
+strategy, then directly selects the first ranked candidate. Before persistence it
+locks/reloads that ad and advertiser and checks active eligibility, bid, target
+interests, category and advertiser identity against the scored snapshot. A changed
+winner aborts the transaction and retries retrieval/ranking, up to three attempts.
+V2 makes one model batch per selection attempt; an inventory-change retry can require
+a fresh batch. Repeated change returns `inventory_changing`/503. The score is never
+paired with a newly changed bid. Display fields are copied from the locked current
+ad. There is no second auction/scoring pass.
+
+The saved JSON selection and response retain strategy/version, score/meaning,
+distinct overlap, predicted CTR, model ID/version, feature version, captured bid and
+retrieval diagnostics. V1 CTR/model metadata are null. Scores serialize as integer
+counts for V1 and exact decimal strings for V2; bid remains decimal. The existing
+immutable selection JSON holds this additive context, so no new schema migration
+is needed. Previously saved V1 selections remain readable with null defaults for
+new optional context fields; replay does not fabricate model attribution.
+
+Request-key lookup happens before retrieval or ranking. A saved selection is replayed
+after bid, inventory, model or configured-strategy changes, including model failure;
+it is not rescored. Empty inventory persists the existing replayable 204 no-ad outcome
+without model inference. Nonempty V2 with an unusable model or invalid model output
+returns safe `ctr_unavailable`/503 and persists no opportunity. It does not silently
+serve V1. A later valid retry of that key may proceed under the explicitly configured
+strategy. Existing mismatch/expiration rules remain in force.
+
+Impression/click endpoints keep their existing contracts. The first accepted click
+credits the recommendation's captured bid once, even if the ad is later edited or
+deactivated. Expected-value score, current bid and auction clearing prices never
+replace that captured amount. Ranking/inference is not repeated for response fields,
+replay or events. Request logs use JSON-safe decimal score strings and include score
+meaning and strategy/model/feature versions; timings still separate retrieval,
+ranking and database stages. No observed CTR/revenue lift is claimed.
+
+```powershell
+# From backend/, with the isolated PostgreSQL test database enabled:
+uv run --locked pytest tests/integration/test_ranked_recommendations.py tests/integration/test_recommendations.py tests/integration/test_retrieval_serving.py tests/unit/test_http.py
 ```
 
 ## CTR-model technical gate

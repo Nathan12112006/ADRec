@@ -2,15 +2,16 @@
 
 from collections.abc import Callable, Iterator
 from datetime import datetime
-from typing import cast
+from typing import Annotated, cast
 
-from fastapi import Request
+from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 from app.core.clock import utc_now
 from app.core.config import Settings
 from app.ctr.serving import CTRModel
 from app.db.session import Database
+from app.ranking.strategies import ExpectedValue, InterestOverlap, RankingStrategy
 
 
 def get_ctr_model(request: Request) -> CTRModel:
@@ -24,6 +25,15 @@ def get_clock() -> Callable[[], datetime]:
 
 def get_settings(request: Request) -> Settings:
     return cast(Settings, request.app.state.settings)
+
+
+def get_ranking_strategy(
+    settings: Annotated[Settings, Depends(get_settings)],
+    model: Annotated[CTRModel, Depends(get_ctr_model)],
+) -> RankingStrategy:
+    if settings.ranking_strategy == "expected-value":
+        return ExpectedValue(model)
+    return InterestOverlap()
 
 
 def get_database(request: Request) -> Database:

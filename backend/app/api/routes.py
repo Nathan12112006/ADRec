@@ -9,10 +9,17 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_clock, get_database, get_session, get_settings
+from app.api.dependencies import (
+    get_clock,
+    get_database,
+    get_ranking_strategy,
+    get_session,
+    get_settings,
+)
 from app.core.errors import WorkflowError
 from app.core.observability import stage
 from app.db.session import Database
+from app.ranking.strategies import RankingStrategy
 from app.schemas.lifecycle import (
     ErrorResponse,
     EventRequest,
@@ -41,6 +48,7 @@ def recommendations(
     request: Request,
     session: SessionDependency,
     clock: ClockDependency,
+    strategy: Annotated[RankingStrategy, Depends(get_ranking_strategy)],
     idempotency_key: Annotated[str, Header(min_length=1, max_length=255)],
 ) -> RecommendationResponse | Response:
     request.state.context["user_id"] = body.user_id
@@ -57,6 +65,7 @@ def recommendations(
             snapshots=request.app.state.snapshots,
             candidate_limit=settings.retrieval_candidate_limit,
             search_limit=settings.retrieval_search_limit,
+            strategy=strategy,
         )
     if result.recommendation_id is None:
         request.state.context["outcome"] = "no_ad"
@@ -66,7 +75,12 @@ def recommendations(
         recommendation_id=str(result.recommendation_id),
         ad_id=result.selection.id,
         strategy=result.selection.strategy,
-        score=result.selection.score,
+        score=result.selection.model_dump(mode="json")["score"],
+        score_meaning=result.selection.score_meaning,
+        strategy_version=result.selection.strategy_version,
+        model_id=result.selection.model_id,
+        model_version=result.selection.model_version,
+        feature_version=result.selection.feature_version,
         outcome="selected",
     )
     return RecommendationResponse(

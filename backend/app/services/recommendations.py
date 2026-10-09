@@ -1,4 +1,4 @@
-"""Durable ad opportunities and immutable baseline selections."""
+"""Durable ad opportunities and coherent immutable ranked selections."""
 
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -18,7 +18,7 @@ from app.core.clock import utc_now
 from app.core.errors import WorkflowError
 from app.core.observability import stage, stages
 from app.models.records import Ad, Advertiser, Recommendation, RequestOutcome, User
-from app.ranking import BaselineCandidate, select_baseline
+from app.ranking.strategies import InterestOverlap, RankingStrategy
 from app.retrieval.contracts import RetrievalResult, RetrievalUser
 from app.retrieval.current import CurrentCandidateRetriever
 from app.retrieval.limits import DEFAULT_CANDIDATE_LIMIT, CandidateLimit
@@ -62,11 +62,17 @@ class AdSelection(BaseModel):
     category: str
     interests: tuple[str, ...]
     bid: Decimal
-    score: int
-    strategy: Literal["interest-overlap"] = "interest-overlap"
-    strategy_version: Literal["baseline-v1"] = "baseline-v1"
-    score_meaning: Literal["distinct_shared_interest_count"] = "distinct_shared_interest_count"
-    predicted_ctr: None = None
+    score: Decimal | int
+    strategy: Literal["interest-overlap", "expected-value"] = "interest-overlap"
+    strategy_version: str = "baseline-v1"
+    score_meaning: Literal[
+        "distinct_shared_interest_count", "expected_simulated_dollars_per_impression"
+    ] = "distinct_shared_interest_count"
+    predicted_ctr: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
+    shared_interest_count: int | None = Field(default=None, ge=0)
+    model_id: str | None = None
+    model_version: str | None = None
+    feature_version: str | None = None
     retrieval: RetrievalContext | None = None
 
 
@@ -100,6 +106,7 @@ def _create_or_replay(
     snapshots: ActiveSnapshot,
     candidate_limit: int,
     search_limit: int,
+    strategy: RankingStrategy,
 ) -> RecommendationResult:
     """Own the transaction; return only after both records have committed."""
     with _transaction(session):
@@ -148,10 +155,15 @@ def _create_or_replay(
                 ):
                     timings[name] = timings.get(name, 0.0) + value
             with stage("ranking_ms"):
-                candidate = select_baseline(
-                    user.interests,
-                    (BaselineCandidate(ad.id, ad.interests, ad.bid) for ad in retrieved.candidates),
+                ranking = strategy.rank(
+                    {
+                        "interests": tuple(user.interests),
+                        "device": user.device,
+                        "age_group": user.age_group,
+                    },
+                    [ad.model_dump() for ad in retrieved.candidates],
                 )
+                candidate = ranking.candidates[0] if ranking.candidates else None
         if candidate is None:
             created_at = clock()
             session.add(
@@ -163,7 +175,7 @@ def _create_or_replay(
                 select(Ad)
                 .join(Advertiser, Ad.advertiser_id == Advertiser.id)
                 .where(
-                    Ad.id == candidate.id,
+                    Ad.id == candidate.ad_id,
                     Ad.dataset_id == user.dataset_id,
                     Ad.active.is_(True),
                     Advertiser.active.is_(True),
@@ -171,11 +183,11 @@ def _create_or_replay(
                 .with_for_update(read=True, of=[Ad, Advertiser])
                 .execution_options(populate_existing=True)
             )
-        retrieved_ad = next(item for item in retrieved.candidates if item.id == candidate.id)
+        retrieved_ad = next(item for item in retrieved.candidates if item.id == candidate.ad_id)
         if (
             ad is None
             or ad.bid != candidate.bid
-            or tuple(ad.interests) != candidate.interests
+            or tuple(ad.interests) != retrieved_ad.interests
             or ad.category != retrieved_ad.category
             or ad.advertiser_id != retrieved_ad.advertiser_id
         ):
@@ -189,7 +201,15 @@ def _create_or_replay(
             category=ad.category,
             interests=tuple(ad.interests),
             bid=ad.bid,
-            score=len(set(user.interests).intersection(ad.interests)),
+            score=candidate.score,
+            strategy=ranking.strategy,
+            strategy_version=ranking.strategy_version,
+            score_meaning=ranking.score_meaning,
+            predicted_ctr=candidate.predicted_ctr,
+            shared_interest_count=candidate.shared_interest_count,
+            model_id=ranking.model_id,
+            model_version=ranking.model_version,
+            feature_version=ranking.feature_version,
             retrieval=RetrievalContext.from_result(retrieved),
         )
         created_at = clock()
@@ -225,6 +245,7 @@ def recommend(
     snapshots: ActiveSnapshot | None = None,
     candidate_limit: int = DEFAULT_CANDIDATE_LIMIT,
     search_limit: int = 4000,
+    strategy: RankingStrategy | None = None,
 ) -> RecommendationResult:
     """Commit a new opportunity or replay its saved outcome after a racing writer."""
     if not request_key.strip() or len(request_key) > 255:
@@ -234,6 +255,7 @@ def recommend(
     received_at = clock()
     TypeAdapter(CandidateLimit).validate_python(candidate_limit)
     active = snapshots if snapshots is not None else ActiveSnapshot()
+    ranking_strategy = strategy if strategy is not None else InterestOverlap()
     try:
         for _ in range(3):
             try:
@@ -246,6 +268,7 @@ def recommend(
                     snapshots=active,
                     candidate_limit=candidate_limit,
                     search_limit=search_limit,
+                    strategy=ranking_strategy,
                 )
             except _InventoryChanged:
                 continue
@@ -264,6 +287,7 @@ def recommend(
                         snapshots=active,
                         candidate_limit=candidate_limit,
                         search_limit=search_limit,
+                        strategy=ranking_strategy,
                     )
                 raise
         raise WorkflowError(

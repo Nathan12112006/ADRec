@@ -16,6 +16,7 @@ from app.core.config import Settings
 from app.core.errors import WorkflowError
 from app.core.observability import JsonFormatter, logger
 from app.main import create_app
+from app.ranking.strategies import RankingStrategy
 from app.retrieval.snapshots import ActiveSnapshot
 from app.schemas.lifecycle import EventResponse, RecommendationResponse
 from app.services.events import EventResult, EventType
@@ -113,6 +114,7 @@ def test_recommendation_schema_and_empty_no_ad(
         snapshots: ActiveSnapshot,
         candidate_limit: int,
         search_limit: int,
+        strategy: RankingStrategy,
     ) -> RecommendationResult:
         assert user_id == 1 and request_key == "key"
         return result
@@ -172,6 +174,7 @@ def test_workflow_errors(client: TestClient, monkeypatch: pytest.MonkeyPatch, st
         snapshots: ActiveSnapshot,
         candidate_limit: int,
         search_limit: int,
+        strategy: RankingStrategy,
     ) -> RecommendationResult:
         raise WorkflowError(status, "safe_reason", "Safe message")
 
@@ -210,6 +213,7 @@ def test_safe_failures_and_request_logging(
         snapshots: ActiveSnapshot,
         candidate_limit: int,
         search_limit: int,
+        strategy: RankingStrategy,
     ) -> RecommendationResult:
         if database_failure:
             raise OperationalError("secret SQL", {}, Exception("password=secret"))
