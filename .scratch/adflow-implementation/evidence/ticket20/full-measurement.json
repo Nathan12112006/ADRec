@@ -1,0 +1,48 @@
+{
+  "python": "3.10.11",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "runs": [
+    {
+      "run": "first",
+      "wall_seconds": 25.323268399999506
+    },
+    {
+      "run": "repeat",
+      "wall_seconds": 18.566733799998474
+    }
+  ],
+  "repeat_equal": true,
+  "audit": {
+    "first": {
+      "passed": true,
+      "model_id": "1597174fe75a23b1b7c5b0be58ab3ded6a63b542a3ed9408d3247e70bc1d1055",
+      "class_counts": {
+        "train": {
+          "0": 684394,
+          "1": 15606
+        },
+        "validation": {
+          "0": 146592,
+          "1": 3408
+        }
+      },
+      "selected_C": 0.1
+    },
+    "repeat": {
+      "passed": true,
+      "model_id": "1597174fe75a23b1b7c5b0be58ab3ded6a63b542a3ed9408d3247e70bc1d1055",
+      "class_counts": {
+        "train": {
+          "0": 684394,
+          "1": 15606
+        },
+        "validation": {
+          "0": 146592,
+          "1": 3408
+        }
+      },
+      "selected_C": 0.1
+    }
+  },
+  "limitation": "Local offline command wall costs including startup/load/fit/export; no serving claim."
+}

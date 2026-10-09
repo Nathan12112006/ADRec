@@ -889,6 +889,79 @@ page-cache target and file-backed temporary storage. This is not a total-process
 memory cap. Temporary files are removed after closing the connection, including
 on Windows. Keep enough free disk for the temporary database/sort and output.
 
+## Offline CTR pipeline training
+
+After feature preparation, train explicitly from `backend/` into a new directory:
+
+```powershell
+uv sync --locked
+uv run --locked python -m app.ctr.training --features ../artifacts/ctr-features-demo --output ../artifacts/ctr-model-demo
+uv run --locked pytest tests/unit/test_ctr_training.py
+```
+
+Optional `--config PATH.json` overrides `TrainingConfig`: `regularization` defaults
+to `[0.1, 1.0, 10.0]` (1–8 positive, distinct, ascending C values), `seed` to 20,
+`max_iter` to 1,000, and `tolerance` to `1e-6`. Smaller C means stronger L2
+regularization. The `lbfgs` solver uses every training example with no class weights
+or negative undersampling. One native numerical thread is used for repeatability.
+The seed is recorded; `lbfgs` itself does not use randomized sample ordering.
+
+The exported scikit-learn Pipeline contains a ColumnTransformer, followed by
+LogisticRegression. StandardScaler fits the two numeric inputs (overlap count and
+category-match flag); OneHotEncoder fits the three categoricals with
+`handle_unknown="ignore"`. Missing strings come from the shared feature builder;
+unseen categories encode as zeros in their respective learned categorical columns.
+Only training data fits preprocessing and coefficients. Each declared C is fitted
+on training data and scored using validation log loss; the lowest score wins, with
+the smallest C breaking exact ties. The chosen fitted pipeline is exported without
+refitting on validation or reading `test.jsonl`. Final-test metrics and baseline
+comparisons belong to ticket 21. Validation loss is a selection statistic, not an
+unbiased final evaluation or a promise of real-user effectiveness.
+
+`app.ctr.inputs.feature_matrix` validates the shared builder's exact five fields and
+orders them for pipeline prediction: overlap count, category match, ad category,
+device type, age group. Labels, IDs, bid and other extra fields are rejected. Empty
+batches form a `(0, 5)` matrix; the later serving adapter handles empty prediction
+batches without calling scikit-learn. Current serving routes do not load this model.
+
+Training requires complete compatible feature/split metadata and verifies both
+consumed file hashes, counts, labels, references to distinct impression identities,
+chronological order and first/last keys. Both training classes and nonempty
+training/validation splits are required. Single-class validation uses explicit
+binary labels for log loss. A convergence warning rejects the run, reporting C and
+class counts with guidance to increase the iteration limit or inspect the inputs.
+No unconverged candidate is silently selected. Existing output is refused. Failure
+after output creation retains a failed status/reason without a complete manifest.
+CLI codes: 0 success, 2 input/configuration/convergence rejection, 3 filesystem failure.
+
+`pipeline.joblib` holds the entire fitted preprocessing/model pipeline. A complete
+`manifest.json` records `ctr-logistic-v1`, a content-derived model ID, feature
+schema/version/order, training/validation class counts, training base rate, solver
+and candidate settings, convergence iterations, validation losses, source manifest
+hash/full provenance and split identity, exact runtime/dependency versions, artifact
+SHA-256, and a reload-checked prediction fixture (absolute tolerance `1e-12`).
+Only project-produced local artifacts are intended for loading; checksum matching
+does not establish trust. Later ticket 22 owns serving compatibility/activation.
+
+Dependencies are pinned to scikit-learn 1.7.2, joblib 1.5.3, threadpoolctl 3.6.0 and
+SciPy 1.15.3 below Python 3.14 / 1.16.3 on Python 3.14, alongside the existing NumPy
+pins. scikit-learn 1.7.2 supports the project's Python 3.10–3.14 range; the native
+and Docker runtimes are verified separately. Loading across dependency versions is
+unsupported; prepare/train in the intended serving environment.
+[Versioned installation guide](https://scikit-learn.org/1.7/install.html),
+[1.7.2 release](https://github.com/scikit-learn/scikit-learn/releases/tag/1.7.2),
+[ColumnTransformer](https://scikit-learn.org/1.7/modules/generated/sklearn.compose.ColumnTransformer.html),
+[OneHotEncoder](https://scikit-learn.org/1.7/modules/generated/sklearn.preprocessing.OneHotEncoder.html),
+[LogisticRegression](https://scikit-learn.org/1.7/modules/generated/sklearn.linear_model.LogisticRegression.html),
+[persistence contract](https://scikit-learn.org/1.7/model_persistence.html).
+
+Raw training/validation arrays, their identity set during validation, and encoded
+training matrices use memory proportional to the consumed examples and encoded
+feature count. History parsing is streamed into preallocated arrays, but fitting is
+an in-memory offline operation. Candidate models run sequentially; each repeats
+preprocessing and fitting. Sparse categorical output reduces practical storage;
+it does not guarantee constant memory or a hardware-independent training duration.
+
 ## Candidate-retrieval technical gate
 
 [Ticket 17](.scratch/adflow-implementation/issues/17-retrieval-gate.md) records the
