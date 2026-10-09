@@ -962,6 +962,66 @@ an in-memory offline operation. Candidate models run sequentially; each repeats
 preprocessing and fitting. Sparse categorical output reduces practical storage;
 it does not guarantee constant memory or a hardware-independent training duration.
 
+## Frozen CTR probability evaluation
+
+After explicit feature preparation and training, evaluate the frozen artifact from
+`backend/`:
+
+```powershell
+uv sync --locked
+uv run --locked python -m app.ctr.evaluation --features ../artifacts/ctr-features-demo --model ../artifacts/ctr-model-demo --output ../artifacts/ctr-evaluation-demo
+uv run --locked pytest tests/unit/test_ctr_evaluation.py
+```
+
+Use the original feature directory and project-produced model in its original
+training runtime. Evaluation checks model content identity, artifact checksum,
+feature schema/order, source manifest identity, exact recorded Python/dependency
+versions and the saved prediction fixture before scoring. Joblib is intended only
+for trusted project artifacts; checksums do not establish trust. The pipeline loads
+once and predicts one batch per split. No fitting, model selection, calibration
+fitting, generator retuning or input/artifact mutation occurs during evaluation.
+The training-only base rate comes from the frozen training manifest and is checked
+against its recorded training counts. Evaluation does not reopen `train.jsonl`.
+
+Both the model and constant baseline score identical validation and final-test
+rows, retaining source hashes, chronological boundaries, counts, clicks and
+observed CTR. Consumed split checksums, counts, binary labels and chronological
+identities are validated. A bad input cannot publish a complete `report.json`.
+Existing output directories are refused. CLI codes: 0 success, 2 input/model
+rejection, 3 filesystem failure.
+
+`report.json` records log loss (primary, lower is better), ROC-AUC (discrimination,
+higher is better), Brier loss (lower is better), and full reliability bins for each
+predictor/split. Explicit `[0,1]` labels preserve binary log loss on single-class
+subsets; AUC is JSON `null` with a reason, and counts/Brier loss remain visible.
+Binary Brier loss uses the mean squared probability error on the `[0,1]` scale.
+Log loss uses scikit-learn's floating-point probability clipping, including at
+zero/one. No accuracy headline or minimum score/lift is required.
+
+`report.md` contains the comparison table and two `reliability-*.png` diagrams.
+Matplotlib 3.10.8 renders them headlessly with a populated-range calibration panel
+and a sample-count panel; plots retain synthetic-data limitations. `--bins` chooses
+1–100 equal-width probability bins (default 20, declared before evaluation):
+`[lower,upper)`, with 1 included in the final bin. Empty bins retain count zero and
+null means in JSON and are omitted from the calibration curve. Sparse bins are
+descriptive, not evidence of calibration precision. The count panel includes empty
+bins and uses a nonnegative symlog axis so zero and large counts remain visible.
+
+Probability scoring, discrimination and calibration differ: lower log loss alone
+does not establish better calibration. Validation already influenced C selection;
+the final test describes later outcomes in this designed synthetic world. Neither
+proves real-user effectiveness or generalization to entirely unseen users/ads.
+Keep unfavorable results visible and never retune the generator or fit anything
+using final-test results. Future calibration work needs a separate development-data
+plan. Evaluation reads each consumed split into memory and scores it as one batch;
+memory scales with rows and encoded features, and reliability work is O(rows*bins).
+These offline metrics are separate from serving latency or simulated revenue.
+
+[Log loss](https://scikit-learn.org/1.7/modules/generated/sklearn.metrics.log_loss.html),
+[Brier loss](https://scikit-learn.org/1.7/modules/generated/sklearn.metrics.brier_score_loss.html),
+[probability calibration](https://scikit-learn.org/1.7/modules/calibration.html),
+[Matplotlib 3.10.8](https://pypi.org/project/matplotlib/3.10.8/).
+
 ## Candidate-retrieval technical gate
 
 [Ticket 17](.scratch/adflow-implementation/issues/17-retrieval-gate.md) records the
