@@ -15,7 +15,9 @@ passed on 2026-10-08; Flat remains the serving default after HNSW failed promoti
 The CTR model and interchangeable V1/V2 ranking are available with validated
 artifacts, coherent selection snapshots and replay. See the
 [ranking technical gate](.scratch/adflow-implementation/issues/26-ranking-gate.md).
-Experiments, Redis, dashboards and HTTP load tests remain planned work.
+Experiment persistence and stable assignment are available; management APIs and
+recommendation routing remain planned work, along with Redis, dashboards and HTTP
+load tests.
 Independent historical exposure artifacts are available for offline model development;
 generation is explicit and never adds live recommendations or events.
 The separate [lifecycle learning checkpoint](.scratch/adflow-implementation/issues/57-learning-lifecycle.md)
@@ -1208,6 +1210,69 @@ ranking and database stages. No observed CTR/revenue lift is claimed.
 ```powershell
 # From backend/, with the isolated PostgreSQL test database enabled:
 uv run --locked pytest tests/integration/test_ranked_recommendations.py tests/integration/test_recommendations.py tests/integration/test_retrieval_serving.py tests/unit/test_http.py
+```
+
+## Experiment identity and assignment
+
+Migration `0004` adds `experiments` without replacing existing history. Run the
+normal explicit migration command before starting the backend:
+
+```powershell
+# From backend/:
+uv run --locked alembic upgrade head
+# Docker, after PostgreSQL is ready:
+docker compose run --rm backend /app/.venv/bin/python -m alembic upgrade head
+```
+
+Records store `ranking-experiment-v1`, assignment version/salt, allocation, both
+strategy names/versions, CTR model ID/version, feature version, shared retrieval
+mode/candidate limit/search limit/HNSW search depth and vector/vocabulary versions.
+Defaults select V1 control/V2 treatment, 500 candidates, search limit4000 and exact
+retrieval. HNSW requires an explicit positive search depth. Exact fallback remains
+allowed; this configuration does not claim an approximate index is currently usable.
+Model IDs are 64 lowercase hex characters; schema validation checks their format,
+while compatible artifact availability will be validated by the management service.
+
+`app.experiments.assignment.assign_variant(user_id, AssignmentConfig)` is a pure
+public function. `AssignmentConfig.model_validate(record)` reads stored identity
+from an ORM record. User IDs are strict positive signed-64-bit integers; salt is
+64 lowercase hex characters generated once from 32 random bytes and persisted.
+The versioned canonical UTF-8 JSON array, with no whitespace, is:
+
+```text
+["sha256-bucket-v1","<lowercase-hyphenated experiment UUID>","<stored salt>","<decimal user ID>"]
+bucket = floor(unsigned_big_endian_SHA256(payload) * 10000 / 2^256)
+control if bucket < control_basis_points, otherwise treatment
+```
+
+Default `control_basis_points=5000` means a 50/50 allocation. The schema permits
+0 through10000 inclusive, making boundary allocations explicit. Observed finite
+user/impression counts need not be exactly balanced. Names, request IDs, process
+hash seeds and request order are absent from the digest. For UUID ending0001,
+salt of 64 zeros and user1, SHA-256 is
+`d4ad52b98974bbaedde5517330eaa17e9e4ef1ee8bb6df3b41b50fce4c07dbb9`:
+bucket8307 is treatment at allocation8307 and control at8308. Different experiment
+identity may reassign the same user. Hashing does constant work for bounded inputs;
+assignment requires no per-user storage or database write.
+
+Experiments begin as drafts. PostgreSQL permits draft configuration edits but keeps
+ID, creation time, assignment algorithm and salt immutable. Starting freezes every
+configuration field; only the transition to stopped with a stop timestamp is allowed.
+Stopped records cannot resume or change. A partial unique index enforces one running
+experiment globally, including racing transactions. Timestamp/state checks and
+triggers apply to raw SQL/ORM writes; deletion and truncation are rejected so history
+survives future experiments. A configuration change after start requires a new record.
+
+This ticket supplies persistence and assignment. Management/activation APIs belong
+to ticket28, and routing/immutable recommendation attribution to ticket29. Existing
+recommendations still use the server-configured strategy; creating a database record
+does not yet route traffic. [Ticket27 evidence](.scratch/adflow-implementation/issues/27-experiment-schema-assignment.md)
+records known vectors, cross-process reproduction, schema upgrade and concurrency
+checks. No experiment effectiveness or human-learning completion is claimed.
+
+```powershell
+# From backend/, with the isolated PostgreSQL test database enabled:
+uv run --locked pytest tests/unit/test_experiment_assignment.py tests/integration/test_experiments.py tests/integration/test_persistence.py
 ```
 
 ## Ranking technical gate
