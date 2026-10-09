@@ -1092,6 +1092,61 @@ local `.env` use are described above.
 [Persistence compatibility](https://scikit-learn.org/1.7/model_persistence.html) and
 [FastAPI lifespan](https://fastapi.tiangolo.com/advanced/events/).
 
+## Interchangeable ranking strategies
+
+`app.ranking.strategies.RankingStrategy.rank(user, candidates)` takes a detached
+user mapping and an ordered sequence of eligible ad mappings. Each ad needs a
+positive integer `id` and finite nonnegative decimal-compatible `bid`; `interests`
+defaults to empty. V2 also uses the shared CTR context fields (`category`, user
+`device`/`age_group`). Retrieval owns eligibility filtering; callers still revalidate
+inventory before persisting a selection. Duplicate IDs and invalid bids raise data
+validation errors before inference. Neither strategy changes the input collection.
+
+`InterestOverlap()` implements V1: distinct shared-interest count descending,
+bid descending, then ad ID ascending. Results preserve `interest-overlap` /
+`baseline-v1` and `distinct_shared_interest_count` metadata. Primary scores are
+integer counts; predicted CTR and model/feature metadata are null. No CTR model is
+needed or invoked, and retrieval cosine similarity is not used as overlap.
+
+`ExpectedValue(ctr_model)` implements V2 using one real CTR-adapter batch in input
+order. Each score is predicted CTR multiplied by the captured decimal bid; order is
+score descending, distinct overlap descending, bid descending, then ad ID ascending.
+For example, CTR 0.10 and bid $1 gives $0.10 expected simulated dollars per impression
+and outranks CTR 0.02 and bid $3, whose score is $0.06. Highest bid or CTR alone need
+not win. Metadata is `expected-value` / `expected-value-v1`, score meaning
+`expected_simulated_dollars_per_impression`, plus the one batch's model ID/version
+and feature version. Invalid model probabilities/counts or model unavailability
+retain the adapter's typed `ctr_unavailable`/503 failure without baseline substitution.
+
+`RankingResult.candidates` is an immutable tuple of scored ads in deterministic
+order, retaining ad ID, bid, distinct overlap, primary score and predicted CTR.
+The caller can select its first entry directly. Empty input returns an empty tuple
+without inference or claimed model metadata; zero bids/scores stay in the result.
+All-zero scores still use the same tie rules. There is no second auction, blending
+or pricing pass. V1 and V2 raw scores have different units and cannot be compared
+as though they measured the same quantity. Actual accepted-click credit continues
+to be the captured decimal bid, not the expected-value score.
+
+V2 converts the finite probability using `Decimal(str(probability))` and multiplies
+with enough local precision for the full product of the two decimal coefficients.
+Sorting uses exact sign-copy operations rather than context-sensitive negation.
+Caller decimal precision and display rounding therefore do not determine ties.
+JSON serializes V1 scores as integers and V2 scores/bids as decimal strings; model
+probabilities remain JSON numbers. This preserves the chosen decimal representation
+of the model float, without claiming the float is an exact underlying probability.
+
+Scoring and score storage are O(C) for C candidates, plus interest-set construction
+and intersections. Full deterministic ordering is O(C log C); selecting only a
+maximum could be O(C). V2 adds feature preparation and dense prediction O(C*F) for
+F encoded features, with sparse encoding changing practical cost. Inference and
+sorting remain outside API handlers. No observed CTR/revenue lift is guaranteed.
+Ticket 25 owns wiring these strategies into recommendation persistence and responses.
+
+```powershell
+# From backend/:
+uv run --locked pytest tests/unit/test_ranking_strategies.py tests/unit/test_baseline.py tests/unit/test_ctr_serving.py
+```
+
 ## CTR-model technical gate
 
 [Ticket 23](.scratch/adflow-implementation/issues/23-ctr-gate.md) records the Phase 3
